@@ -108,7 +108,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     completed_at      TEXT,
     completed_by      TEXT,
     previous_due_date TEXT,
-    new_due_date      TEXT
+    new_due_date      TEXT,
+    share_token       TEXT,                 -- secret link for ticking without a login
+    share_expires_at  TEXT                  -- YYYY-MM-DD; link also dies when the job closes
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_item ON jobs(item_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);

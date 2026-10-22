@@ -31,7 +31,24 @@ def close_db(_exc=None):
 def init_db(conn):
     schema = resources.files("ingatmaintain").joinpath("schema.sql").read_text()
     conn.executescript(schema)
+    _migrate(conn)
     conn.commit()
+
+
+# Columns added after the first release: (table, column, definition).
+ADDED_COLUMNS = [
+    ("jobs", "share_token", "TEXT"),
+    ("jobs", "share_expires_at", "TEXT"),
+]
+
+
+def _migrate(conn):
+    """Bring databases created by older versions up to date."""
+    for table, column, definition in ADDED_COLUMNS:
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_share_token ON jobs(share_token)")
 
 
 def get_setting(conn, key, default=None):

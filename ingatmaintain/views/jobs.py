@@ -1,10 +1,13 @@
 """Jobs: a live checklist for one site visit (or series of visits)."""
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+import secrets
+from datetime import timedelta
+
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 
 from ..auth import display_name
 from ..db import get_db
-from ..util import add_months, now_str, parse_date, today
+from ..util import add_months, fmt_date, now_str, parse_date, today
 from .procedures import group_sections, load_parts
 
 bp = Blueprint("jobs", __name__, url_prefix="/jobs")
@@ -189,18 +192,19 @@ def print_view(job_id):
     return render_template("jobs/print.html", job=job, **load_job_detail(conn, job))
 
 
-@bp.route("/<int:job_id>/toggle", methods=["POST"])
-def toggle(job_id):
-    """Tick / untick one box. Answers JSON for the page script, or redirects without JS."""
-    conn = get_db()
-    job = get_job(job_id)
+def handle_toggle(conn, job, who, back_url):
+    """Tick / untick one box. Answers JSON for the page script, or redirects to back_url without JS.
+
+    Shared by the logged-in job page and the share-link page.
+    """
+    job_id = job["id"]
     wants_json = request.headers.get("Accept", "").startswith("application/json")
 
     def fail(message, code=400):
         if wants_json:
             return jsonify({"error": message}), code
         flash(message, "error")
-        return redirect(url_for("jobs.detail", job_id=job_id))
+        return redirect(back_url)
 
     if job["status"] != "open":
         return fail("This job is closed - reopen it to change the checklist.", 409)
@@ -230,7 +234,7 @@ def toggle(job_id):
         conn.execute("DELETE FROM job_checks WHERE id = ?", (existing["id"],))
         checked, by, at = False, None, None
     else:
-        by, at = display_name(), now_str()
+        by, at = who, now_str()
         conn.execute(
             "INSERT INTO job_checks (job_id, kind, ref_id, machine_id, checked_by, checked_at) VALUES (?, ?, ?, ?, ?, ?)",
             (job_id, *key, by, at),
@@ -241,8 +245,13 @@ def toggle(job_id):
     if wants_json:
         done, total = job_progress(conn, job_id)
         return jsonify({"checked": checked, "by": by, "at": at, "done": done, "total": total})
-    anchor = f"#{kind}-{ref_id}"
-    return redirect(url_for("jobs.detail", job_id=job_id) + anchor)
+    return redirect(f"{back_url}#{kind}-{ref_id}")
+
+
+@bp.route("/<int:job_id>/toggle", methods=["POST"])
+def toggle(job_id):
+    job = get_job(job_id)
+    return handle_toggle(get_db(), job, display_name(), url_for("jobs.detail", job_id=job_id))
 
 
 @bp.route("/<int:job_id>/update", methods=["POST"])
@@ -305,7 +314,7 @@ def complete(job_id):
         else:
             new_due = None if retire else next_due.isoformat()
             conn.execute(
-                "UPDATE jobs SET status = 'completed', completed_at = ?, completed_by = ?, "
+                "UPDATE jobs SET status = 'completed', share_token = NULL, completed_at = ?, completed_by = ?, "
                 "previous_due_date = ?, new_due_date = ? WHERE id = ?",
                 (now_str(), display_name(), item["due_date"], new_due, job_id),
             )
@@ -340,7 +349,7 @@ def set_status(job_id):
     job = get_job(job_id)
     action = request.form.get("action")
     if action == "cancel" and job["status"] == "open":
-        conn.execute("UPDATE jobs SET status = 'cancelled' WHERE id = ?", (job_id,))
+        conn.execute("UPDATE jobs SET status = 'cancelled', share_token = NULL WHERE id = ?", (job_id,))
         message = "Job cancelled."
     elif action == "reopen" and job["status"] != "open":
         # Reopening a completed job does not roll the item's due date back - edit the item if needed.
@@ -357,3 +366,30 @@ def set_status(job_id):
     conn.commit()
     flash(message, "success")
     return redirect(url_for("jobs.detail", job_id=job_id))
+
+
+@bp.route("/<int:job_id>/share", methods=["POST"])
+def share(job_id):
+    """Create (or renew) and revoke the job's share link."""
+    conn = get_db()
+    job = get_job(job_id)
+    if request.form.get("action") == "revoke":
+        conn.execute("UPDATE jobs SET share_token = NULL, share_expires_at = NULL WHERE id = ?", (job_id,))
+        log = message = "Share link turned off."
+    elif job["status"] == "open":
+        expires = today() + timedelta(days=current_app.config["SHARE_LINK_DAYS"])
+        conn.execute(
+            "UPDATE jobs SET share_token = ?, share_expires_at = ? WHERE id = ?",
+            (secrets.token_urlsafe(24), expires.isoformat(), job_id),
+        )
+        log = f"Share link created, valid until {fmt_date(expires)}."
+        message = log + " It also stops working when the job is closed. Any older link no longer works."
+    else:
+        abort(400)
+    conn.execute(
+        "INSERT INTO job_notes (job_id, author, created_at, body) VALUES (?, ?, ?, ?)",
+        (job_id, display_name(), now_str(), log),
+    )
+    conn.commit()
+    flash(message, "success")
+    return redirect(url_for("jobs.detail", job_id=job_id) + "#share")

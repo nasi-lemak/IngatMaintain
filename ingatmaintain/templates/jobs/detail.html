@@ -57,67 +57,39 @@
   </section>
 </div>
 
-<div class="grid-2">
-  <section class="card">
-    <h2>💻 Software on our laptop</h2>
-    {% for r in software %}
-      <div class="check-row" id="req-{{ r.id }}">
-        {% with kind='req', ref_id=r.id, machine_id=0, label=None, check=r.check %}{% include "jobs/_check.html" %}{% endwith %}
-        <div><strong>{{ r.name }}</strong>{% if r.details %}<br><small class="muted">{{ r.details }}</small>{% endif %}</div>
-      </div>
-    {% else %}<p class="muted">Nothing listed.</p>{% endfor %}
-  </section>
-  <section class="card">
-    <h2>🎒 Items to bring</h2>
-    {% for r in equipment %}
-      <div class="check-row" id="req-{{ r.id }}">
-        {% with kind='req', ref_id=r.id, machine_id=0, label=None, check=r.check %}{% include "jobs/_check.html" %}{% endwith %}
-        <div><strong>{{ r.name }}</strong>{% if r.quantity %} ×{{ r.quantity }}{% endif %}{% if r.details %}<br><small class="muted">{{ r.details }}</small>{% endif %}</div>
-      </div>
-    {% else %}<p class="muted">Nothing listed.</p>{% endfor %}
-  </section>
-</div>
+{% set toggle_url = url_for('jobs.toggle', job_id=job.id) %}
+{% set note_url = url_for('jobs.add_note', job_id=job.id) %}
+{% set can_tick = true %}
+{% include "jobs/_checklist.html" %}
 
-<section class="card">
-  <h2>Checklist</h2>
-  {% set n = namespace(i=0) %}
-  {% for section, steps in groups %}
-    {% if section %}<h3 class="section-title">{{ section }}</h3>{% endif %}
-    {% for s in steps %}{% set n.i = n.i + 1 %}
-      <div class="step {{ 'step-done' if s.done }}" id="step-{{ s.id }}">
-        {% if s.boxes|length == 1 and not s.boxes[0].machine_id %}
-          <div class="check-row">
-            {% with kind='step', ref_id=s.id, machine_id=0, label=None, check=s.boxes[0].check %}{% include "jobs/_check.html" %}{% endwith %}
-            <div class="step-text"><span class="step-no">{{ n.i }}.</span> <strong>{{ s.title }}</strong>
-              {% if s.details %}<div class="pre muted small">{{ s.details }}</div>{% endif %}</div>
-          </div>
-        {% else %}
-          <div class="step-text"><span class="step-no">{{ n.i }}.</span> <strong>{{ s.title }}</strong> <span class="badge">each computer</span>
-            {% if s.details %}<div class="pre muted small">{{ s.details }}</div>{% endif %}</div>
-          <div class="machine-checks">
-            {% for b in s.boxes %}
-              {% with kind='step', ref_id=s.id, machine_id=b.machine_id, label=b.machine_name, check=b.check %}{% include "jobs/_check.html" %}{% endwith %}
-            {% endfor %}
-          </div>
-        {% endif %}
-      </div>
-    {% endfor %}
-  {% endfor %}
+<section class="card" id="share">
+  <h2>🔗 Share link (no login)</h2>
+  {% if job.share_token %}
+    {% set share_url = config.BASE_URL ~ url_for('shared.view', token=job.share_token) %}
+    <p>Anyone with this link can tick this job's checklist and add notes, but nothing else.
+      Ticks are stamped with the name they enter. It works until <strong>{{ job.share_expires_at|fmt_date }}</strong>
+      or until the job is completed or cancelled.</p>
+    <input class="copy" readonly value="{{ share_url }}" onclick="this.select()">
+    <div class="actions">
+      <a class="button small" href="https://wa.me/?text={{ ('Checklist for ' ~ job.title ~ ': ' ~ share_url)|urlencode }}" target="_blank" rel="noopener">Send via WhatsApp</a>
+      <form method="post" action="{{ url_for('jobs.share', job_id=job.id) }}" class="inline">
+        {{ csrf() }}<input type="hidden" name="action" value="create"><button class="button small">Renew link</button>
+      </form>
+      <form method="post" action="{{ url_for('jobs.share', job_id=job.id) }}" class="inline">
+        {{ csrf() }}<input type="hidden" name="action" value="revoke"><button class="button small danger">Turn off link</button>
+      </form>
+    </div>
+  {% elif job.status == 'open' %}
+    <p class="muted">Let a colleague or contractor without an account tick this checklist from their phone.
+      The link only shows this job's checklist and packing list. No other clients, computer IPs or settings.</p>
+    <form method="post" action="{{ url_for('jobs.share', job_id=job.id) }}">
+      {{ csrf() }}<input type="hidden" name="action" value="create"><button class="button small">Create share link</button>
+    </form>
+  {% else %}
+    <p class="muted">Share links only work while the job is open.</p>
+  {% endif %}
 </section>
 
-<section class="card" id="notes">
-  <h2>Notes & log</h2>
-  <form method="post" action="{{ url_for('jobs.add_note', job_id=job.id) }}" class="form">
-    {{ csrf() }}
-    <textarea name="body" rows="2" placeholder="e.g. CSRs sent to Synapxe, ticket #12345. Computer 3 was offline – return Tuesday."></textarea>
-    <button class="button small">Add note</button>
-  </form>
-  <ul class="log">
-    {% for note in notes %}
-      <li><small class="muted">{{ note.created_at }} · {{ note.author }}</small><div class="pre">{{ note.body }}</div></li>
-    {% endfor %}
-  </ul>
-</section>
 
 <section class="card subtle">
   <form method="post" action="{{ url_for('jobs.set_status', job_id=job.id) }}" class="inline"

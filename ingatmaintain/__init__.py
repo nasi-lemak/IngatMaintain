@@ -52,7 +52,10 @@ def create_app(test_config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=env_bool("SESSION_COOKIE_SECURE", False),
-        PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+        # How long a device stays logged in after its last visit.
+        PERMANENT_SESSION_LIFETIME=timedelta(days=int(os.environ.get("SESSION_LIFETIME_DAYS", "365"))),
+        # How long a job's share link works (it also stops when the job is completed or cancelled).
+        SHARE_LINK_DAYS=int(os.environ.get("SHARE_LINK_DAYS", "30")),
     )
     if test_config:
         app.config.update(test_config)
@@ -62,11 +65,11 @@ def create_app(test_config=None):
         app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or _secret_key(data_dir)
 
     from . import auth, db, util
-    from .views import admin, clients, dashboard, items, jobs, procedures
+    from .views import admin, clients, dashboard, items, jobs, procedures, shared
 
     db.init_app(app)
     auth.init_app(app)
-    for module in (dashboard, clients, items, procedures, jobs, admin):
+    for module in (dashboard, clients, items, procedures, jobs, admin, shared):
         app.register_blueprint(module.bp)
 
     app.jinja_env.filters["fmt_date"] = util.fmt_date

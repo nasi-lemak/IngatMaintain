@@ -22,6 +22,8 @@ from .db import create_user, get_db
 bp = Blueprint("auth", __name__)
 
 PUBLIC_ENDPOINTS = {"auth.login", "auth.setup", "admin.calendar_feed", "static"}
+# Share-link pages check their own token instead of a login.
+PUBLIC_PREFIXES = ("shared.",)
 
 
 def csrf_token():
@@ -129,7 +131,9 @@ def init_app(app):
             if not expected or not hmac.compare_digest(sent, expected):
                 abort(400, "Your session expired - please reload the page and try again.")
 
-        if g.user is None and request.endpoint not in PUBLIC_ENDPOINTS and request.endpoint is not None:
+        endpoint = request.endpoint
+        if g.user is None and endpoint is not None and endpoint not in PUBLIC_ENDPOINTS \
+                and not endpoint.startswith(PUBLIC_PREFIXES):
             return redirect(url_for("auth.login", next=request.full_path))
 
     # A global (not a context variable) so imported macros can use it too.

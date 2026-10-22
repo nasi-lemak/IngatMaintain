@@ -33,6 +33,25 @@ A job's page works well on a phone, and every tick saves straight away. If the s
 has no signal (a server room, for example), use **Print checklist** for a paper
 copy, then tick the boxes online afterwards.
 
+### Logins and share links
+
+Everyone on the team has their own login, so each tick records who did it. A
+device stays logged in for a year after its last visit (`SESSION_LIFETIME_DAYS`),
+so people rarely see the login page.
+
+To let someone without an account help, such as a colleague or a contractor, open
+the job and click **Create share link**. You can send the link straight to WhatsApp
+from there. The person opens it on their phone, enters their name, and can then
+tick that job's checklist and add notes. Their ticks show as "Sam Lee (shared link)".
+
+The link shows only that job: its checklist, packing list, site address and access
+notes, and computer names. It shows no other clients, no hostnames or IPs, and no
+settings. It stops working when any of these happens:
+- the job is completed or cancelled
+- someone clicks **Turn off link**
+- someone renews it (the old link stops and a new one is made)
+- after `SHARE_LINK_DAYS` (default 30)
+
 ## Running it
 
 ### With Docker (recommended)
@@ -89,6 +108,8 @@ All settings are environment variables. See `.env.example` for the full list.
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Post reminders to a Telegram group. |
 | `WEBHOOK_URL` | Slack / Teams / Google Chat incoming webhook. The JSON payload has a `text` field. |
 | `SESSION_COOKIE_SECURE` | Set to `true` when served over HTTPS. |
+| `SESSION_LIFETIME_DAYS` | How long a device stays logged in after its last visit (default 365). |
+| `SHARE_LINK_DAYS` | How long a job's share link works at most (default 30). |
 
 **Settings → Send test notification** checks that the channels work.
 **Settings → Calendar feed** gives a private `.ics` link. Subscribe to it in Google Calendar

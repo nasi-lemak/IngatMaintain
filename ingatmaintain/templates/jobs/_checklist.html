@@ -1,0 +1,66 @@
+{# Packing list, checklist and notes log. Shared by the job page and the share-link page.
+   Expects: job, groups, software, equipment, notes, toggle_url, note_url, can_tick #}
+{% from "_macros.html" import csrf %}
+<div class="grid-2">
+  <section class="card">
+    <h2>💻 Software on our laptop</h2>
+    {% for r in software %}
+      <div class="check-row" id="req-{{ r.id }}">
+        {% with kind='req', ref_id=r.id, machine_id=0, label=None, check=r.check %}{% include "jobs/_check.html" %}{% endwith %}
+        <div><strong>{{ r.name }}</strong>{% if r.details %}<br><small class="muted">{{ r.details }}</small>{% endif %}</div>
+      </div>
+    {% else %}<p class="muted">Nothing listed.</p>{% endfor %}
+  </section>
+  <section class="card">
+    <h2>🎒 Items to bring</h2>
+    {% for r in equipment %}
+      <div class="check-row" id="req-{{ r.id }}">
+        {% with kind='req', ref_id=r.id, machine_id=0, label=None, check=r.check %}{% include "jobs/_check.html" %}{% endwith %}
+        <div><strong>{{ r.name }}</strong>{% if r.quantity %} ×{{ r.quantity }}{% endif %}{% if r.details %}<br><small class="muted">{{ r.details }}</small>{% endif %}</div>
+      </div>
+    {% else %}<p class="muted">Nothing listed.</p>{% endfor %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>Checklist</h2>
+  {% set n = namespace(i=0) %}
+  {% for section, steps in groups %}
+    {% if section %}<h3 class="section-title">{{ section }}</h3>{% endif %}
+    {% for s in steps %}{% set n.i = n.i + 1 %}
+      <div class="step {{ 'step-done' if s.done }}" id="step-{{ s.id }}">
+        {% if s.boxes|length == 1 and not s.boxes[0].machine_id %}
+          <div class="check-row">
+            {% with kind='step', ref_id=s.id, machine_id=0, label=None, check=s.boxes[0].check %}{% include "jobs/_check.html" %}{% endwith %}
+            <div class="step-text"><span class="step-no">{{ n.i }}.</span> <strong>{{ s.title }}</strong>
+              {% if s.details %}<div class="pre muted small">{{ s.details }}</div>{% endif %}</div>
+          </div>
+        {% else %}
+          <div class="step-text"><span class="step-no">{{ n.i }}.</span> <strong>{{ s.title }}</strong> <span class="badge">each computer</span>
+            {% if s.details %}<div class="pre muted small">{{ s.details }}</div>{% endif %}</div>
+          <div class="machine-checks">
+            {% for b in s.boxes %}
+              {% with kind='step', ref_id=s.id, machine_id=b.machine_id, label=b.machine_name, check=b.check %}{% include "jobs/_check.html" %}{% endwith %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+</section>
+
+<section class="card" id="notes">
+  <h2>Notes & log</h2>
+  {% if can_tick %}
+  <form method="post" action="{{ note_url }}" class="form">
+    {{ csrf() }}
+    <textarea name="body" rows="2" placeholder="e.g. CSRs sent to Synapxe, ticket #12345. Computer 3 was offline – return Tuesday."></textarea>
+    <button class="button small">Add note</button>
+  </form>
+  {% endif %}
+  <ul class="log">
+    {% for note in notes %}
+      <li><small class="muted">{{ note.created_at }} · {{ note.author }}</small><div class="pre">{{ note.body }}</div></li>
+    {% endfor %}
+  </ul>
+</section>

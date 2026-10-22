@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ client.name }} checklist{% endblock %}
+{% block content %}
+<p class="muted small">Ingat<span class="accent">Maintain</span> · shared checklist</p>
+<h1>{{ client.name }} – {{ item.title }}</h1>
+<p class="muted">{{ job.procedure_name }}{% if job.scheduled_date %} · visit {{ job.scheduled_date|fmt_date }}{% endif %}
+  {% if job.assigned_to %} · team: {{ job.assigned_to }}{% endif %}</p>
+
+{% if current_user %}
+  <p class="flash flash-info">You're logged in. <a href="{{ url_for('jobs.detail', job_id=job.id) }}">Open the full job page</a>.</p>
+{% endif %}
+
+{% if not visitor %}
+<form method="post" action="{{ url_for('shared.set_name', token=token) }}" class="card form">
+  {{ csrf() }}
+  <label>Your name <small class="muted">Each box you tick is stamped with it.</small>
+    <input name="name" required maxlength="60" autofocus autocomplete="name"></label>
+  <button class="button primary">Start ticking</button>
+</form>
+{% else %}
+  <p class="muted small">Ticking as <strong>{{ visitor }}</strong>.</p>
+{% endif %}
+
+<div class="job-progress card" data-job-progress>
+  {% set pct = (100 * job.done / job.total)|round|int if job.total else 0 %}
+  <div class="progress big"><div class="progress-bar" style="width: {{ pct }}%"></div></div>
+  <span><strong data-progress-text>{{ job.done }}/{{ job.total }}</strong> ticked</span>
+</div>
+
+{% if client.site_address or client.access_notes or machines %}
+<section class="card">
+  <h2>Site</h2>
+  {% if client.site_address %}<p>{{ client.site_address }}</p>{% endif %}
+  {% if client.access_notes %}<p class="pre callout">{{ client.access_notes }}</p>{% endif %}
+  {% if machines %}<p class="small"><strong>Computers:</strong> {{ machines|map(attribute='name')|join(', ') }}</p>{% endif %}
+</section>
+{% endif %}
+
+{% set toggle_url = url_for('shared.toggle', token=token) %}
+{% set note_url = url_for('shared.add_note', token=token) %}
+{% set can_tick = visitor is not none %}
+{% include "jobs/_checklist.html" %}
+{% endblock %}
