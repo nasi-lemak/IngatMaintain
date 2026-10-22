@@ -49,9 +49,26 @@ Only real changes are saved. Each one goes into the version history with the dat
 who recorded it, and the job it was done on.
 
 When you add a new release, every site still on an older version shows up under
-**Sites behind on software** on the dashboard and the Versions page. Its **Plan upgrade**
-button creates a maintenance item ("Upgrade Clinic Queue App to 2.4.0"). From there,
-start a job with a deployment checklist as usual.
+**Sites behind on software** on the dashboard and the Versions page. The team also
+gets a reminder in the daily message: once when the site falls behind, then every
+`OUTDATED_REMINDER_DAYS` (default 30) until it's upgraded. Each reminder says whether
+an upgrade is already planned.
+
+**Plan upgrade** creates a maintenance item ("Upgrade Clinic Queue App to 2.4.0") with
+the built-in **Software deployment / upgrade** checklist already selected:
+- **Preparation:** approval, installer checksum, packing.
+- **On site:** back up, install, test, with one tick per computer.
+- **Wrap up:** record versions, clean the secure drive.
+
+Edit the steps to match how your team works. When you complete a deployment job, the
+app reminds you if no versions were recorded on it, and archives the item by default
+because upgrades are one-off.
+
+**Holding a site at a version.** If a client must stay on an approved version, for
+example while waiting for change approval, open the client page and choose **Hold**
+with the version and a reason. That site is no longer flagged for newer releases, only
+if a computer falls below the held version. Held computers show in purple.
+Click **Release hold** when the upgrade is approved.
 
 ### Visits and rescheduling
 
@@ -127,6 +144,8 @@ flask --app ingatmaintain seed-example   # loads the NHG Khatib Polyclinic examp
 ```
 
 Admins can also load the example from **Settings**, or from the dashboard while it is empty.
+The built-in checklists (SSL renewal and software deployment) can also be added on
+their own from **Checklists → Start from a template**.
 
 ## Configuration
 
@@ -145,6 +164,7 @@ All settings are environment variables. See `.env.example` for the full list.
 | `SESSION_COOKIE_SECURE` | Set to `true` when served over HTTPS. |
 | `SESSION_LIFETIME_DAYS` | How long a device stays logged in after its last visit (default 365). |
 | `SHARE_LINK_DAYS` | How long a job's share link works at most (default 30). |
+| `OUTDATED_REMINDER_DAYS` | Remind again every N days while a site is behind on software (default 30, 0 = first notice only). |
 
 **Settings → Send test notification** checks that the channels work.
 **Settings → Calendar feed** gives a private `.ics` link. Subscribe to it in Google Calendar
@@ -156,6 +176,7 @@ or Outlook to see every expiry date and planned site visit.
   When a mark is reached, one reminder goes out, as a daily digest that covers all items.
 - After the due date, a reminder goes out every week until the job is completed or the item is archived.
 - Site visits are reminded the day before (or on the day, if booked late), in the same daily message.
+- Sites behind on software get a notice when they fall behind, then every `OUTDATED_REMINDER_DAYS`.
 - Completing a job sets the new due date, so the reminder cycle starts again for that date.
 - If no channel is configured or every channel fails, nothing is marked as sent, and the
   reminders go out on the next run once the problem is fixed. The dashboard always shows what's due.

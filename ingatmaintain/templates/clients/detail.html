@@ -69,12 +69,56 @@
     {% if machines %}<a class="button small" href="{{ url_for('software.update_client', client_id=client.id) }}">Record versions</a>{% endif %}
   </div>
   {% for g in outdated %}
-    <p class="callout">{{ g.software_name }}: {{ g.machines|length }} computer{{ 's' if g.machines|length != 1 }}
-      on {{ g.versions|join(', ') }}, latest is {{ g.latest }}.
-      <a href="{{ deployment_link(g) }}">Plan upgrade</a></p>
+    <div class="callout">
+      {{ g.software_name }}: {{ g.machines|length }} computer{{ 's' if g.machines|length != 1 }}
+      on {{ g.versions|join(', ') }}, {{ ('held at ' ~ g.latest) if g.hold else ('latest is ' ~ g.latest) }}.
+      <a href="{{ deployment_link(g) }}">Plan upgrade</a>
+      {% if not g.hold %}
+      <details>
+        <summary>Not upgrading yet? Hold this site at its current version</summary>
+        <form method="post" action="{{ url_for('software.set_hold') }}" class="form">
+          {{ csrf() }}
+          <input type="hidden" name="client_id" value="{{ client.id }}">
+          <input type="hidden" name="software_id" value="{{ g.software_id }}">
+          <div class="grid-2">
+            <label>Stay on version <input name="version" value="{{ g.versions[-1] }}" required></label>
+            <label>Reason * <input name="reason" required placeholder="e.g. Waiting for client change approval"></label>
+          </div>
+          <button class="button small">Hold</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  {% endfor %}
+  {% for h in holds %}
+    <div class="hold-note"><span class="badge">On hold</span> <strong>{{ h.software_name }}</strong> held at <span class="ver ver-held">{{ h.version }}</span>
+      – {{ h.reason }} <small class="muted">({{ h.set_by }}, {{ h.set_on|fmt_date }})</small>
+      <form method="post" action="{{ url_for('software.release_hold', hold_id=h.id) }}" class="inline"
+            data-confirm="Release the hold? The site will be flagged if it's behind the latest release.">
+        {{ csrf() }}<button class="link small">Release hold</button>
+      </form></div>
   {% endfor %}
   {% if version_columns %}
     {{ version_table(version_columns, version_rows) }}
+    {% set unheld = version_columns|rejectattr('hold')|list %}
+    {% if unheld %}
+    <details>
+      <summary>Hold a product at a version</summary>
+      <p class="muted small">For a site that must stay on an approved version. It won't be flagged when newer
+        releases come out, only if a computer falls below the held version.</p>
+      <form method="post" action="{{ url_for('software.set_hold') }}" class="form">
+        {{ csrf() }}
+        <input type="hidden" name="client_id" value="{{ client.id }}">
+        <div class="grid-3">
+          <label>Software
+            <select name="software_id">{% for c in unheld %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></label>
+          <label>Stay on version <input name="version" required></label>
+          <label>Reason * <input name="reason" required placeholder="e.g. Client validated this version"></label>
+        </div>
+        <button class="button small">Hold</button>
+      </form>
+    </details>
+    {% endif %}
     <details>
       <summary>Recent version changes</summary>
       {{ version_history(version_changes, show_client=false) }}

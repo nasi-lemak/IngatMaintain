@@ -5,6 +5,10 @@
 <h1>Complete job #{{ job.id }}</h1>
 <p>{{ job.title }}</p>
 <div class="card">{{ progress(job.done, job.total) }}</div>
+{% if is_deployment and not versions_recorded %}
+  <p class="callout">No software versions have been recorded on this job yet.
+    <a href="{{ url_for('software.update_job', job_id=job.id) }}">Record versions</a> first so the next visit knows what's installed.</p>
+{% endif %}
 <form method="post" class="card form">
   {{ csrf() }}
   <label>New expiry / next due date for <strong>{{ item.title }}</strong>
@@ -12,7 +16,8 @@
     <small class="muted">Currently {{ item.due_date|fmt_date or 'not set' }}.
       For certificates, use the expiry date on the new certificate. Reminders restart from this date.</small>
   </label>
-  <label class="checkbox"><input type="checkbox" name="retire" value="1"> No next date – archive this item (e.g. system decommissioned)</label>
+  <label class="checkbox"><input type="checkbox" name="retire" value="1" {{ 'checked' if is_deployment and not item.recurrence_months }}>
+    No next date – archive this item (one-off job such as an upgrade, or system decommissioned)</label>
   <label>Summary (optional) <textarea name="summary" rows="3" placeholder="Anything the next team should know"></textarea></label>
   {% if job.done < job.total %}
     <label class="checkbox warn"><input type="checkbox" name="force" value="1">

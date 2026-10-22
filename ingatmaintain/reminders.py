@@ -133,6 +133,51 @@ def collect_visits(conn, on_date):
     return visits
 
 
+def collect_upgrades(conn, on_date, every_days):
+    """Sites behind on software: a first notice, then one every `every_days` (0 = first notice only)."""
+    from .views.software import outdated
+
+    upgrades = []
+    for g in outdated(conn):
+        key = (g["client_id"], g["software_id"], g["latest"])
+        first = conn.execute(
+            "SELECT MIN(sent_on) FROM upgrade_reminder_log WHERE client_id = ? AND software_id = ? AND target = ?", key
+        ).fetchone()[0]
+        if first is None:
+            bucket = 0
+        else:
+            days = (on_date - parse_date(first)).days
+            if not every_days or days < every_days:
+                continue
+            bucket = days // every_days
+        if conn.execute(
+            "SELECT 1 FROM upgrade_reminder_log WHERE client_id = ? AND software_id = ? AND target = ? AND bucket = ?",
+            key + (bucket,),
+        ).fetchone():
+            continue
+        planned = conn.execute(
+            """SELECT id, title FROM maintenance_items
+               WHERE client_id = ? AND archived = 0 AND title LIKE '%' || ? || '%' ORDER BY id DESC LIMIT 1""",
+            (g["client_id"], g["software_name"]),
+        ).fetchone()
+        upgrades.append({**g, "bucket": bucket, "first": first, "planned": dict(planned) if planned else None})
+    return upgrades
+
+
+def format_upgrade(u, base_url):
+    n = len(u["machines"])
+    target = f"held at {u['latest']}" if u["hold"] else f"latest {u['latest']}"
+    line = (f"[UPGRADE] {u['client_name']} - {u['software_name']}: {n} computer{'s' if n != 1 else ''} "
+            f"on {', '.join(u['versions'])}, {target}")
+    if u["first"]:
+        line += f" (behind since {fmt_date(u['first'])})"
+    if u["planned"]:
+        line += f"\n    Planned: {u['planned']['title']} - {base_url}/items/{u['planned']['id']}"
+    else:
+        line += f"\n    No upgrade planned yet - {base_url}/clients/{u['client_id']}#versions"
+    return line
+
+
 def _day(iso):
     d = parse_date(iso)
     return f"{d.strftime('%a')} {fmt_date(d)}"
@@ -163,7 +208,7 @@ def format_visit(visit, base_url):
     return "\n".join(lines)
 
 
-def build_message(due, on_date, base_url, visits=()):
+def build_message(due, on_date, base_url, visits=(), upgrades=()):
     parts, sections, lines = [], [], []
     if visits:
         n = len(visits)
@@ -180,6 +225,12 @@ def build_message(due, on_date, base_url, visits=()):
         due_lines = [format_line(d, base_url) for d in due]
         sections.append("MAINTENANCE REMINDERS\n\n" + "\n\n".join(due_lines))
         lines += due_lines
+    if upgrades:
+        n = len(upgrades)
+        parts.append(f"{n} site{'s' if n != 1 else ''} behind on software")
+        upgrade_lines = [format_upgrade(u, base_url) for u in upgrades]
+        sections.append("SOFTWARE UPGRADES\n\n" + "\n\n".join(upgrade_lines))
+        lines += upgrade_lines
     subject = "IngatMaintain: " + ", ".join(parts)
     body = (
         f"IngatMaintain - {fmt_date(on_date)}\n\n"
@@ -236,7 +287,7 @@ def send_telegram(config, text):
     _post_json(url, {"chat_id": config["TELEGRAM_CHAT_ID"], "text": text[:4000], "disable_web_page_preview": True})
 
 
-def send_webhook(config, subject, body, due, visits=()):
+def send_webhook(config, subject, body, due, visits=(), upgrades=()):
     # "text" works for Slack, Google Chat and Teams incoming webhooks.
     _post_json(
         config["WEBHOOK_URL"],
@@ -261,11 +312,21 @@ def send_webhook(config, subject, body, due, visits=()):
                 }
                 for v in visits
             ],
+            "upgrades": [
+                {
+                    "client": u["client_name"],
+                    "software": u["software_name"],
+                    "running": u["versions"],
+                    "target": u["latest"],
+                    "computers": len(u["machines"]),
+                }
+                for u in upgrades
+            ],
         },
     )
 
 
-def deliver(config, conn, subject, body, due=(), visits=()):
+def deliver(config, conn, subject, body, due=(), visits=(), upgrades=()):
     """Send on every configured channel. Returns (succeeded, errors)."""
     recipients = notify_recipients(conn)
     succeeded, errors = [], []
@@ -276,7 +337,7 @@ def deliver(config, conn, subject, body, due=(), visits=()):
             elif channel == "telegram":
                 send_telegram(config, f"{subject}\n\n{body}")
             elif channel == "webhook":
-                send_webhook(config, subject, body, list(due), list(visits))
+                send_webhook(config, subject, body, list(due), list(visits), list(upgrades))
             succeeded.append(channel)
         except Exception as exc:  # report and carry on with the other channels
             log.exception("Reminder channel %s failed", channel)
@@ -296,11 +357,12 @@ def _run_reminders(conn, config, on_date, dry_run):
     on_date = on_date or _today(config)
     due = collect_due(conn, on_date)
     visits = collect_visits(conn, on_date)
-    if not due and not visits:
+    upgrades = collect_upgrades(conn, on_date, config.get("OUTDATED_REMINDER_DAYS", 30))
+    if not due and not visits and not upgrades:
         return {"sent": 0, "message": "No reminders due today.", "lines": []}
 
-    count = len(due) + len(visits)
-    subject, body, lines = build_message(due, on_date, config["BASE_URL"], visits)
+    count = len(due) + len(visits) + len(upgrades)
+    subject, body, lines = build_message(due, on_date, config["BASE_URL"], visits, upgrades)
     if dry_run:
         return {"sent": 0, "message": f"{count} reminder(s) would be sent (dry run).", "lines": lines}
 
@@ -312,7 +374,7 @@ def _run_reminders(conn, config, on_date, dry_run):
             "lines": lines,
         }
 
-    succeeded, errors = deliver(config, conn, subject, body, due, visits)
+    succeeded, errors = deliver(config, conn, subject, body, due, visits, upgrades)
     if not succeeded:
         return {"sent": 0, "message": "Sending failed: " + "; ".join(errors), "lines": lines}
 
@@ -323,6 +385,11 @@ def _run_reminders(conn, config, on_date, dry_run):
     )
     conn.executemany(
         "UPDATE job_visits SET reminded_for = visit_date WHERE id = ?", [(v["id"],) for v in visits]
+    )
+    conn.executemany(
+        "INSERT OR IGNORE INTO upgrade_reminder_log (client_id, software_id, target, bucket, sent_on) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [(u["client_id"], u["software_id"], u["latest"], u["bucket"], on_date.isoformat()) for u in upgrades],
     )
     conn.commit()
     message = f"Sent {count} reminder(s) via {', '.join(succeeded)}."

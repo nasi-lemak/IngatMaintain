@@ -37,11 +37,11 @@ def load_software(conn):
     for row in conn.execute("SELECT * FROM software ORDER BY name"):
         sw = dict(row)
         sw["latest"] = latest.get(row["id"], "")
-        statuses = [version_status(i["version"], sw["latest"]) for i in conn.execute(
-            "SELECT version FROM installations WHERE software_id = ?", (row["id"],))]
-        sw["installs"] = len(statuses)
-        sw["behind"] = statuses.count("behind")
-        sw["clients_behind"] = len(outdated(conn, software_id=row["id"], latest=latest))
+        sw["installs"] = conn.execute(
+            "SELECT COUNT(*) FROM installations WHERE software_id = ?", (row["id"],)).fetchone()[0]
+        groups = outdated(conn, software_id=row["id"], latest=latest)
+        sw["behind"] = sum(len(g["machines"]) for g in groups)
+        sw["clients_behind"] = len(groups)
         items.append(sw)
     return items
 
@@ -53,9 +53,33 @@ def get_software(software_id):
     return sw
 
 
+def load_holds(conn, client_id=None):
+    """{(client_id, software_id): hold} for sites deliberately staying on a version."""
+    sql = """SELECT h.*, s.name AS software_name, c.name AS client_name FROM version_holds h
+             JOIN software s ON s.id = h.software_id JOIN clients c ON c.id = h.client_id"""
+    rows = conn.execute(sql + (" WHERE h.client_id = ?" if client_id else ""), (client_id,) if client_id else ())
+    return {(r["client_id"], r["software_id"]): dict(r) for r in rows}
+
+
+def cell_status(installed, latest, hold=None):
+    """Status of one installation, measured against the site's hold (if any) instead of the latest release.
+
+    'held' = on the version the site is held at, even though a newer release exists.
+    """
+    target = hold["version"] if hold else latest
+    status = version_status(installed, target)
+    if hold and status == "current" and version_status(installed, latest) == "behind":
+        return "held"
+    return status
+
+
 def outdated(conn, software_id=None, client_id=None, latest=None):
-    """[(client, software, machines behind, versions in use)] for sites not on the latest version."""
+    """Sites with computers behind their target version (the hold version, or else the latest release).
+
+    One dict per (client, software) with the machines behind and the versions they run.
+    """
     latest = latest if latest is not None else latest_versions(conn)
+    holds = load_holds(conn)
     where, params = ["1 = 1"], []
     if software_id:
         where.append("s.id = ?")
@@ -76,14 +100,17 @@ def outdated(conn, software_id=None, client_id=None, latest=None):
     ).fetchall()
     groups = {}
     for r in rows:
-        target = latest.get(r["software_id"], "")
-        if version_status(r["version"], target) != "behind":
-            continue
         key = (r["client_id"], r["software_id"])
+        hold = holds.get(key)
+        release = latest.get(r["software_id"], "")
+        if cell_status(r["version"], release, hold) != "behind":
+            continue
         g = groups.setdefault(key, {
             "client_id": r["client_id"], "client_name": r["client_name"],
             "software_id": r["software_id"], "software_name": r["software_name"],
-            "latest": target, "machines": [], "versions": set(),
+            # "latest" is the version this site should move to.
+            "latest": hold["version"] if hold else release, "release": release, "hold": hold,
+            "machines": [], "versions": set(),
         })
         g["machines"].append(r["machine_name"])
         g["versions"].add(r["version"])
@@ -97,6 +124,7 @@ def version_grid(conn, machines, extra_software_ids=()):
     """Columns (software present on these machines, plus any extra) and cells for a machines x software table."""
     machine_ids = [m["id"] for m in machines]
     latest = latest_versions(conn)
+    holds = load_holds(conn)
     installs = {}
     if machine_ids:
         marks = ",".join("?" * len(machine_ids))
@@ -109,16 +137,21 @@ def version_grid(conn, machines, extra_software_ids=()):
         for s in conn.execute(f"SELECT * FROM software WHERE id IN ({marks}) ORDER BY name", list(software_ids)):
             columns.append({**dict(s), "latest": latest.get(s["id"], ""),
                             "releases": [r["version"] for r in releases_for(conn, s["id"])]})
+    if machines:  # on a client or job page every computer is at the same site
+        for col in columns:
+            col["hold"] = holds.get((machines[0]["client_id"], col["id"]))
     rows = []
     for m in machines:
         cells = []
         for col in columns:
             inst = installs.get((m["id"], col["id"]))
+            hold = holds.get((m["client_id"], col["id"]))
             cells.append({
                 "software_id": col["id"],
                 "version": inst["version"] if inst else "",
                 "updated_on": inst["updated_on"] if inst else "",
-                "status": version_status(inst["version"], col["latest"]) if inst else "none",
+                "status": cell_status(inst["version"], col["latest"], hold) if inst else "none",
+                "hold": hold,
             })
         rows.append({"machine": m, "cells": cells})
     return columns, rows
@@ -200,13 +233,18 @@ def _extra_ids(conn):
 
 
 def deployment_link(group):
-    """Prefilled 'new maintenance item' link for planning an upgrade."""
-    query = urlencode({
+    """Prefilled 'new maintenance item' link for planning an upgrade, using the deployment checklist if there is one."""
+    from ..seed import DEPLOY_PROCEDURE
+
+    params = {
         "client": group["client_id"],
         "title": f"Upgrade {group['software_name']} to {group['latest']}",
         "category": "Software deployment",
-    })
-    return url_for("items.new") + "?" + query
+    }
+    proc = get_db().execute("SELECT id FROM procedures WHERE name = ?", (DEPLOY_PROCEDURE,)).fetchone()
+    if proc:
+        params["procedure"] = proc["id"]
+    return url_for("items.new") + "?" + urlencode(params)
 
 
 # ---------------------------------------------------------------- catalogue
@@ -259,6 +297,7 @@ def detail(software_id):
     sw = get_software(software_id)
     releases = releases_for(conn, software_id)
     latest = releases[0]["version"] if releases else ""
+    holds = {cid: h for (cid, sid), h in load_holds(conn).items() if sid == software_id}
     installs = []
     for r in conn.execute(
         """SELECT i.*, m.name AS machine_name, c.id AS client_id, c.name AS client_name
@@ -266,13 +305,14 @@ def detail(software_id):
            WHERE i.software_id = ? ORDER BY c.name, m.name""",
         (software_id,),
     ):
-        installs.append({**dict(r), "status": version_status(r["version"], latest)})
+        installs.append({**dict(r), "status": cell_status(r["version"], latest, holds.get(r["client_id"]))})
     by_client = {}
     for inst in installs:
         by_client.setdefault((inst["client_id"], inst["client_name"]), []).append(inst)
     behind = {g["client_id"]: g for g in outdated(conn, software_id=software_id)}
     return render_template(
         "software/detail.html", sw=sw, releases=releases, latest=latest, by_client=by_client, behind=behind,
+        holds=holds,
         deployment_link=deployment_link, recent=history(conn, "h.software_id = ?", (software_id,)),
     )
 
@@ -336,6 +376,48 @@ def delete_release(release_id):
     conn.commit()
     flash(f"Release {rel['version']} removed.", "success")
     return redirect(url_for("software.detail", software_id=rel["software_id"]))
+
+
+# ---------------------------------------------------------------- holds
+
+@bp.route("/holds", methods=["POST"])
+def set_hold():
+    """Keep a site on a version, e.g. until the client approves the upgrade."""
+    conn = get_db()
+    client_id = request.form.get("client_id", type=int)
+    software_id = request.form.get("software_id", type=int)
+    version = request.form.get("version", "").strip()
+    reason = request.form.get("reason", "").strip()
+    client = conn.execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    sw = conn.execute("SELECT * FROM software WHERE id = ?", (software_id,)).fetchone()
+    if client is None or sw is None:
+        abort(400)
+    back = url_for("clients.detail", client_id=client_id) + "#versions"
+    if not version or not reason:
+        flash("Enter the version to stay on and the reason (e.g. waiting for change approval).", "error")
+        return redirect(back)
+    conn.execute(
+        """INSERT INTO version_holds (client_id, software_id, version, reason, set_by, set_on)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(client_id, software_id) DO UPDATE SET version = excluded.version,
+             reason = excluded.reason, set_by = excluded.set_by, set_on = excluded.set_on""",
+        (client_id, software_id, version, reason, display_name(), today().isoformat()),
+    )
+    conn.commit()
+    flash(f"{client['name']} will stay on {sw['name']} {version} and won't be flagged for newer releases.", "success")
+    return redirect(back)
+
+
+@bp.route("/holds/<int:hold_id>/delete", methods=["POST"])
+def release_hold(hold_id):
+    conn = get_db()
+    hold = conn.execute("SELECT * FROM version_holds WHERE id = ?", (hold_id,)).fetchone()
+    if hold is None:
+        abort(404)
+    conn.execute("DELETE FROM version_holds WHERE id = ?", (hold_id,))
+    conn.commit()
+    flash("Hold released - the site is measured against the latest release again.", "success")
+    return redirect(url_for("clients.detail", client_id=hold["client_id"]) + "#versions")
 
 
 # ---------------------------------------------------------------- recording versions

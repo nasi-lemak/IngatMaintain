@@ -484,7 +484,12 @@ def complete(job_id):
     suggested = None
     if item["recurrence_months"]:
         suggested = add_months(today(), item["recurrence_months"]).isoformat()
-    return render_template("jobs/complete.html", job=job, item=item, suggested=suggested)
+    is_deployment = item["category"] == "Software deployment"
+    versions_recorded = conn.execute(
+        "SELECT COUNT(*) FROM version_history WHERE job_id = ?", (job_id,)
+    ).fetchone()[0]
+    return render_template("jobs/complete.html", job=job, item=item, suggested=suggested,
+                           is_deployment=is_deployment, versions_recorded=versions_recorded)
 
 
 @bp.route("/<int:job_id>/status", methods=["POST"])

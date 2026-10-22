@@ -120,7 +120,11 @@ def index():
         FROM procedures p ORDER BY p.name
         """
     ).fetchall()
-    return render_template("procedures/index.html", procedures=procs)
+    from ..seed import TEMPLATES
+
+    existing = {p["name"].lower() for p in procs}
+    templates = [(key, t[0], t[1]) for key, t in TEMPLATES.items() if t[0].lower() not in existing]
+    return render_template("procedures/index.html", procedures=procs, templates=templates)
 
 
 @bp.route("/new", methods=["GET", "POST"])
@@ -194,6 +198,17 @@ def edit(procedure_id):
         equipment=equipment,
         sections=SECTION_SUGGESTIONS,
     )
+
+
+@bp.route("/templates/<key>", methods=["POST"])
+def add_template(key):
+    from ..seed import TEMPLATES, ensure_template
+
+    if key not in TEMPLATES:
+        abort(404)
+    procedure_id = ensure_template(get_db(), key)
+    flash("Checklist added from template - adjust the steps to match how your team works.", "success")
+    return redirect(url_for("procedures.detail", procedure_id=procedure_id))
 
 
 @bp.route("/<int:procedure_id>/duplicate", methods=["POST"])

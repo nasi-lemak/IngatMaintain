@@ -60,7 +60,7 @@
         <td>{{ g.software_name }}</td>
         <td>{% for v in g.versions %}<span class="ver ver-behind">{{ v }}</span> {% endfor %}
           <small class="muted">on {{ g.machines|length }} computer{{ 's' if g.machines|length != 1 }}</small></td>
-        <td><span class="ver ver-current">{{ g.latest }}</span></td>
+        <td><span class="ver ver-current">{{ g.latest }}</span>{% if g.hold %} <small class="muted">held</small>{% endif %}</td>
         <td class="nowrap"><a class="button small" href="{{ deployment_link(g) }}">Plan upgrade</a></td>
       </tr>
     {% endfor %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import csrf %}
 {% block title %}Checklists{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -26,4 +27,17 @@
   </tbody>
 </table>
 </div>
+{% if templates %}
+<section class="card">
+  <h2>Start from a template</h2>
+  <ul class="plain">
+    {% for key, name, description in templates %}
+      <li><strong>{{ name }}</strong> <span class="muted small">– {{ description }}</span>
+        <form method="post" action="{{ url_for('procedures.add_template', key=key) }}" class="inline">
+          {{ csrf() }}<button class="button small">Add</button>
+        </form></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 {% endblock %}

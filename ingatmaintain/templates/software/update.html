@@ -31,7 +31,8 @@
   <table class="version-grid">
     <thead>
       <tr><th>Computer</th>
-        {% for c in columns %}<th>{{ c.name }}{% if c.latest %}<br><small class="muted">latest {{ c.latest }}</small>{% endif %}</th>{% endfor %}
+        {% for c in columns %}<th>{{ c.name }}{% if c.latest %}<br><small class="muted">latest {{ c.latest }}</small>{% endif %}
+          {% if c.hold %}<br><small class="muted">held at {{ c.hold.version }}</small>{% endif %}</th>{% endfor %}
       </tr>
     </thead>
     <tbody>

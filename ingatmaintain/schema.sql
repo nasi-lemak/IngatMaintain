@@ -236,3 +236,29 @@ CREATE TABLE IF NOT EXISTS version_history (
 );
 CREATE INDEX IF NOT EXISTS idx_version_history_machine ON version_history(machine_id);
 CREATE INDEX IF NOT EXISTS idx_version_history_software ON version_history(software_id);
+
+-- A site deliberately staying on a version (e.g. waiting for the client's
+-- change approval). Its computers are measured against this version instead
+-- of the latest release.
+CREATE TABLE IF NOT EXISTS version_holds (
+    id          INTEGER PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    software_id INTEGER NOT NULL REFERENCES software(id) ON DELETE CASCADE,
+    version     TEXT NOT NULL,
+    reason      TEXT NOT NULL DEFAULT '',
+    set_by      TEXT NOT NULL,
+    set_on      TEXT NOT NULL,
+    UNIQUE (client_id, software_id)
+);
+
+-- Upgrade reminders sent: once when a site falls behind a release, then every
+-- OUTDATED_REMINDER_DAYS while it stays behind. bucket 0 = first notice.
+CREATE TABLE IF NOT EXISTS upgrade_reminder_log (
+    id          INTEGER PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    software_id INTEGER NOT NULL REFERENCES software(id) ON DELETE CASCADE,
+    target      TEXT NOT NULL,
+    bucket      INTEGER NOT NULL,
+    sent_on     TEXT NOT NULL,
+    UNIQUE (client_id, software_id, target, bucket)
+);

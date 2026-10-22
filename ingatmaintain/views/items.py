@@ -128,7 +128,7 @@ def new():
             "title": request.args.get("title", ""),
             "category": request.args.get("category", ""),
             "reminder_days": DEFAULT_REMINDER_DAYS,
-            "procedure_id": None,
+            "procedure_id": request.args.get("procedure", type=int),
         }
     return render_template("items/form.html", item=item, **_form_context(conn))
 

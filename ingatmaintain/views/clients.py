@@ -4,7 +4,7 @@ from ..auth import admin_required
 from ..db import get_db
 from .items import load_items
 from .jobs import load_jobs
-from .software import deployment_link, history, outdated, version_grid
+from .software import deployment_link, history, load_holds, outdated, version_grid
 
 bp = Blueprint("clients", __name__, url_prefix="/clients")
 
@@ -80,6 +80,7 @@ def detail(client_id):
         version_columns=version_columns, version_rows=version_rows,
         outdated=outdated(conn, client_id=client_id), deployment_link=deployment_link,
         version_changes=history(conn, "c.id = ?", (client_id,), limit=10),
+        holds=list(load_holds(conn, client_id).values()),
     )
 
 

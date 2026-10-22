@@ -74,7 +74,7 @@
 
 {% macro version_badge(version, status) -%}
   {%- if version -%}
-  <span class="ver ver-{{ status }}" title="{{ {'current': 'Latest version', 'behind': 'Older than the latest release', 'ahead': 'Newer than the latest recorded release', 'unknown': 'No release recorded yet'}[status] }}">{{ version }}</span>
+  <span class="ver ver-{{ status }}" title="{{ {'current': 'Latest version', 'behind': 'Older than the version this site should be on', 'ahead': 'Newer than the latest recorded release', 'unknown': 'No release recorded yet', 'held': 'Site is held at this version'}[status] }}">{{ version }}</span>
   {%- else -%}<span class="muted">–</span>{%- endif -%}
 {%- endmacro %}
 
@@ -84,7 +84,8 @@
 <table class="version-grid">
   <thead>
     <tr><th>Computer</th>
-      {% for c in columns %}<th>{{ c.name }}{% if c.latest %}<br><small class="muted">latest {{ c.latest }}</small>{% endif %}</th>{% endfor %}
+      {% for c in columns %}<th>{{ c.name }}{% if c.latest %}<br><small class="muted">latest {{ c.latest }}</small>{% endif %}
+        {% if c.hold %}<br><small class="muted">held at {{ c.hold.version }}</small>{% endif %}</th>{% endfor %}
     </tr>
   </thead>
   <tbody>

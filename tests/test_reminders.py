@@ -42,7 +42,7 @@ def test_overdue_reminds_weekly(app, conn, monkeypatch):
     _setup(conn)
     app.config["WEBHOOK_URL"] = "https://hooks.example.com/x"
     calls = []
-    monkeypatch.setattr(reminders, "send_webhook", lambda cfg, s, b, due, visits=(): calls.append(due))
+    monkeypatch.setattr(reminders, "send_webhook", lambda cfg, s, b, due, *rest: calls.append(due))
     with app.app_context():
         for day in (22, 23, 28, 29):
             reminders.run_reminders(conn, app.config, on_date=date(2028, 10, day))

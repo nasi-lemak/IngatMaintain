@@ -49,6 +49,8 @@ def create_app(test_config=None):
         # Built-in daily scheduler (used by run.py)
         REMINDER_SCHEDULER=env_bool("REMINDER_SCHEDULER", True),
         REMINDER_HOUR=int(os.environ.get("REMINDER_HOUR", "8")),
+        # Remind again every N days while a site is behind on software (0 = first notice only).
+        OUTDATED_REMINDER_DAYS=int(os.environ.get("OUTDATED_REMINDER_DAYS", "30")),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=env_bool("SESSION_COOKIE_SECURE", False),
