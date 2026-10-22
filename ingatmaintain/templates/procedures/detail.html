@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ proc.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ proc.name }}</h1>
+  <div class="actions">
+    <a class="button primary" href="{{ url_for('procedures.edit', procedure_id=proc.id) }}">Edit</a>
+    <form method="post" action="{{ url_for('procedures.duplicate', procedure_id=proc.id) }}" class="inline">
+      {{ csrf() }}<button class="button">Duplicate</button>
+    </form>
+  </div>
+</div>
+{% if proc.description %}<p class="pre">{{ proc.description }}</p>{% endif %}
+
+<div class="grid-2">
+  <section class="card">
+    <h2>💻 Software on our laptop</h2>
+    <ul class="plain">
+      {% for r in software %}<li><strong>{{ r.name }}</strong>{% if r.details %} – <span class="muted">{{ r.details }}</span>{% endif %}</li>
+      {% else %}<li class="muted">None listed.</li>{% endfor %}
+    </ul>
+  </section>
+  <section class="card">
+    <h2>🎒 Items to bring</h2>
+    <ul class="plain">
+      {% for r in equipment %}<li><strong>{{ r.name }}</strong>{% if r.quantity %} ×{{ r.quantity }}{% endif %}{% if r.details %} – <span class="muted">{{ r.details }}</span>{% endif %}</li>
+      {% else %}<li class="muted">None listed.</li>{% endfor %}
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Steps ({{ step_count }})</h2>
+  {% set n = namespace(i=0) %}
+  {% for section, steps in groups %}
+    {% if section %}<h3 class="section-title">{{ section }}</h3>{% endif %}
+    <ol class="steps" start="{{ n.i + 1 }}">
+      {% for s in steps %}{% set n.i = n.i + 1 %}
+        <li><strong>{{ s.title }}</strong>{% if s.per_machine %} <span class="badge">each computer</span>{% endif %}
+          {% if s.details %}<div class="pre muted">{{ s.details }}</div>{% endif %}</li>
+      {% endfor %}
+    </ol>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Used by</h2>
+  <ul class="plain">
+    {% for i in items %}<li><a href="{{ url_for('items.detail', item_id=i.id) }}">{{ i.client_name }} – {{ i.title }}</a> <small class="muted">due {{ i.due_date|fmt_date }}</small></li>
+    {% else %}<li class="muted">Not linked to any maintenance item yet.</li>{% endfor %}
+  </ul>
+</section>
+
+<form method="post" action="{{ url_for('procedures.delete', procedure_id=proc.id) }}" class="card subtle"
+      data-confirm="Delete this checklist? Jobs already started keep their copy.">
+  {{ csrf() }}<button class="button small danger">Delete checklist</button>
+</form>
+{% endblock %}

@@ -1,0 +1,25 @@
+body { font: 11pt/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #000; margin: 1.5cm; }
+h1 { font-size: 16pt; margin: 0 0 0.3em; }
+h2 { font-size: 12pt; margin: 1.2em 0 0.4em; border-bottom: 1px solid #000; }
+p { margin: 0.2em 0; }
+.note { border-left: 3px solid #000; padding-left: 0.5em; font-style: italic; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; }
+ul.boxes { list-style: none; padding: 0; margin: 0; }
+ul.boxes li { padding: 0.15em 0 0.15em 1.6em; position: relative; }
+ul.boxes li::before, .box {
+  content: ""; display: inline-block; width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 2px;
+}
+ul.boxes li::before { position: absolute; left: 0; top: 0.35em; }
+ul.boxes li.done::before, .box.done { background: #000; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border: 1px solid #000; padding: 0.3em 0.4em; vertical-align: top; }
+th { font-size: 9pt; background: #eee; }
+td.num, th.num { width: 2em; text-align: center; }
+.mcol { width: 4.5em; text-align: center; font-size: 8.5pt; }
+tr.section td { background: #eee; font-weight: 700; text-transform: uppercase; font-size: 9pt; }
+.details { font-size: 8.5pt; color: #333; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+.lines { height: 6em; background: repeating-linear-gradient(#fff, #fff 1.9em, #999 1.9em, #999 2em); }
+.footer { margin-top: 1em; font-size: 8pt; color: #555; }
+button.no-print { float: right; padding: 0.4em 1em; font-size: 11pt; }
+tr { page-break-inside: avoid; }
+@media print { .no-print { display: none; } body { margin: 0; } }

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "_macros.html" import jobs_table %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Jobs</h1>
+  <div class="actions">
+    <a class="button {{ 'primary' if show != 'all' }}" href="{{ url_for('jobs.index') }}">Open</a>
+    <a class="button {{ 'primary' if show == 'all' }}" href="{{ url_for('jobs.index', show='all') }}">All</a>
+  </div>
+</div>
+<p class="muted">Start a job from a <a href="{{ url_for('items.index') }}">maintenance item</a>.</p>
+{{ jobs_table(jobs) }}
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import items_table %}
+{% block title %}Maintenance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Maintenance items</h1>
+  <div class="actions"><a class="button primary" href="{{ url_for('items.new') }}">+ Add item</a></div>
+</div>
+<form method="get" class="filters">
+  <select name="client" onchange="this.form.submit()">
+    <option value="">All clients</option>
+    {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if c.id == client_id }}>{{ c.name }}</option>{% endfor %}
+  </select>
+  <select name="status" onchange="this.form.submit()">
+    <option value="">Any status</option>
+    {% for key, label in [('overdue','Overdue'),('urgent','Due ≤ 30 days'),('upcoming','Plan now'),('ok','OK'),('none','No due date')] %}
+      <option value="{{ key }}" {{ 'selected' if key == status }}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="show" onchange="this.form.submit()">
+    <option value="active">Active</option>
+    <option value="archived" {{ 'selected' if show == 'archived' }}>Archived</option>
+  </select>
+  <noscript><button class="button small">Filter</button></noscript>
+</form>
+{{ items_table(items) }}
+{% endblock %}

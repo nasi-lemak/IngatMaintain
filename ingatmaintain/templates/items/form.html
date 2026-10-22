@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ item.title or 'New maintenance item' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit ' ~ item.title if item.id else 'New maintenance item' }}</h1>
+{% if not clients %}
+  <p class="flash flash-info">Add a <a href="{{ url_for('clients.new') }}">client</a> first.</p>
+{% endif %}
+<form method="post" class="card form">
+  {{ csrf() }}
+  <div class="grid-2">
+    <label>Client *
+      <select name="client_id" required>
+        <option value="">Choose…</option>
+        {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if c.id == item.client_id }}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Category
+      <input name="category" list="categories" value="{{ item.category or '' }}" placeholder="e.g. SSL certificate">
+      <datalist id="categories">{% for c in categories %}<option value="{{ c }}">{% endfor %}</datalist>
+    </label>
+  </div>
+  <label>What needs maintaining? *
+    <input name="title" value="{{ item.title or '' }}" required placeholder="e.g. SSL certificate – MQTT (Mosquitto)">
+  </label>
+  <div class="grid-2">
+    <label>Expiry / due date
+      <input type="date" name="due_date" value="{{ item.due_date or '' }}">
+    </label>
+    <label>Checklist to use
+      <select name="procedure_id">
+        <option value="">None yet</option>
+        {% for p in procedures %}<option value="{{ p.id }}" {{ 'selected' if p.id == item.procedure_id }}>{{ p.name }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="grid-2">
+    <label>Remind us this many days before
+      <input name="reminder_days" value="{{ item.reminder_days or '' }}" placeholder="180,90,60,30,14,7,1">
+      <small class="muted">One reminder per number, then weekly once overdue. Start early if a third party (e.g. Synapxe) is involved.</small>
+    </label>
+    <label>Repeats every (months)
+      <input type="number" min="1" max="120" name="recurrence_months" value="{{ item.recurrence_months or '' }}" placeholder="optional">
+      <small class="muted">Only used to suggest the next due date when a job is completed. Leave empty for certificates – you'll enter the new expiry.</small>
+    </label>
+  </div>
+  <label>Notes <textarea name="notes" rows="3">{{ item.notes or '' }}</textarea></label>
+  <div class="actions">
+    <button class="button primary">Save</button>
+    <a class="button" href="{{ url_for('items.detail', item_id=item.id) if item.id else url_for('items.index') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

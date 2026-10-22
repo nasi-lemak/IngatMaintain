@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ proc.name or 'New checklist' }}{% endblock %}
+
+{% macro step_row(s) %}
+<div class="row-editor step-row" data-row>
+  <div class="row-fields">
+    <div class="grid-step">
+      <input name="step_section" value="{{ s.section or '' }}" list="sections" placeholder="Section (e.g. On site)" aria-label="Section">
+      <input name="step_title" value="{{ s.title or '' }}" placeholder="Step to cross off" aria-label="Step">
+      <select name="step_per_machine" aria-label="Tick once or per computer">
+        <option value="0">Tick once</option>
+        <option value="1" {{ 'selected' if s.per_machine }}>Tick for each computer</option>
+      </select>
+    </div>
+    <textarea name="step_details" rows="{{ (s.details or "").count("\n") + 1 }}" placeholder="Details / commands (optional)" aria-label="Details">{{ s.details or '' }}</textarea>
+  </div>
+  <div class="row-buttons">
+    <button type="button" class="icon" data-move="-1" title="Move up">↑</button>
+    <button type="button" class="icon" data-move="1" title="Move down">↓</button>
+    <button type="button" class="icon danger-text" data-remove title="Remove">✕</button>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro software_row(r) %}
+<div class="row-editor" data-row>
+  <div class="row-fields grid-2">
+    <input name="software_name" value="{{ r.name or '' }}" placeholder="Software, e.g. OpenSSL" aria-label="Software">
+    <input name="software_details" value="{{ r.details or '' }}" placeholder="What it's for (optional)" aria-label="Details">
+  </div>
+  <div class="row-buttons">
+    <button type="button" class="icon" data-move="-1" title="Move up">↑</button>
+    <button type="button" class="icon" data-move="1" title="Move down">↓</button>
+    <button type="button" class="icon danger-text" data-remove title="Remove">✕</button>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro equipment_row(r) %}
+<div class="row-editor" data-row>
+  <div class="row-fields grid-equip">
+    <input name="equipment_name" value="{{ r.name or '' }}" placeholder="Item, e.g. Portable monitor" aria-label="Item">
+    <input name="equipment_quantity" value="{{ r.quantity or '' }}" placeholder="Qty" aria-label="Quantity">
+    <input name="equipment_details" value="{{ r.details or '' }}" placeholder="Notes (optional)" aria-label="Notes">
+  </div>
+  <div class="row-buttons">
+    <button type="button" class="icon" data-move="-1" title="Move up">↑</button>
+    <button type="button" class="icon" data-move="1" title="Move down">↓</button>
+    <button type="button" class="icon danger-text" data-remove title="Remove">✕</button>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1>{{ 'Edit checklist' if proc.id else 'New checklist' }}</h1>
+<form method="post" class="form">
+  {{ csrf() }}
+  <section class="card">
+    <label>Name * <input name="name" value="{{ proc.name or '' }}" required placeholder="e.g. SSL certificate renewal – MQTT (Mosquitto)"></label>
+    <label>Description <textarea name="description" rows="2">{{ proc.description or '' }}</textarea></label>
+  </section>
+
+  <section class="card">
+    <h2>Steps</h2>
+    <p class="muted small">Steps are shown in order and grouped by section. Choose <em>Tick for each computer</em>
+      for steps done on every machine (e.g. generate CSR) – the job then shows one box per computer.</p>
+    <datalist id="sections">{% for s in sections %}<option value="{{ s }}">{% endfor %}</datalist>
+    <div data-list="steps">
+      {% for s in steps %}{{ step_row(s) }}{% endfor %}
+      {{ step_row({}) }}
+    </div>
+    <button type="button" class="button small" data-add="steps">+ Add step</button>
+    <template data-template="steps">{{ step_row({}) }}</template>
+  </section>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>💻 Software needed on our laptop</h2>
+      <div data-list="software">
+        {% for r in software %}{{ software_row(r) }}{% endfor %}
+        {{ software_row({}) }}
+      </div>
+      <button type="button" class="button small" data-add="software">+ Add software</button>
+      <template data-template="software">{{ software_row({}) }}</template>
+    </section>
+    <section class="card">
+      <h2>🎒 Items to bring</h2>
+      <div data-list="equipment">
+        {% for r in equipment %}{{ equipment_row(r) }}{% endfor %}
+        {{ equipment_row({}) }}
+      </div>
+      <button type="button" class="button small" data-add="equipment">+ Add item</button>
+      <template data-template="equipment">{{ equipment_row({}) }}</template>
+    </section>
+  </div>
+  <p class="muted small">Empty rows are ignored when saving.</p>
+  <div class="actions sticky-actions">
+    <button class="button primary">Save checklist</button>
+    <a class="button" href="{{ url_for('procedures.detail', procedure_id=proc.id) if proc.id else url_for('procedures.index') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

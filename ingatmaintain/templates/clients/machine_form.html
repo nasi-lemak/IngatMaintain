@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ machine.name }}{% endblock %}
+{% block content %}
+<h1>{{ machine.name }} <small class="muted">· {{ client.name }}</small></h1>
+<form method="post" class="card form">
+  {{ csrf() }}
+  <div class="grid-2">
+    <label>Name * <input name="name" value="{{ machine.name }}" required></label>
+    <label>Hostname <input name="hostname" value="{{ machine.hostname }}"></label>
+    <label>IP address <input name="ip_address" value="{{ machine.ip_address }}"></label>
+    <label>Location <input name="location" value="{{ machine.location }}"></label>
+    <label>OS <input name="os" value="{{ machine.os }}"></label>
+  </div>
+  <label>Notes <textarea name="notes" rows="3">{{ machine.notes }}</textarea></label>
+  <div class="actions">
+    <button class="button primary">Save</button>
+    <a class="button" href="{{ url_for('clients.detail', client_id=client.id) }}#machines">Cancel</a>
+  </div>
+</form>
+{% endblock %}

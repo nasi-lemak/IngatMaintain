@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}First-time setup{% endblock %}
+{% block content %}
+<div class="auth-box card">
+  <h1>Welcome to Ingat<span class="accent">Maintain</span></h1>
+  <p>Create the first admin account. You can add the rest of the team afterwards under Settings.</p>
+  <form method="post">
+    {{ csrf() }}
+    <label>Username <input name="username" required autofocus></label>
+    <label>Full name <input name="full_name"></label>
+    <label>Email <small class="muted">(for reminders)</small> <input name="email" type="email"></label>
+    <label>Password <small class="muted">(min. 8 characters)</small> <input name="password" type="password" minlength="8" required></label>
+    <button class="button primary wide">Create admin account</button>
+  </form>
+</div>
+{% endblock %}

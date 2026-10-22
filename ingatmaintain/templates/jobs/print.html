@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job #{{ job.id }} checklist</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
+</head>
+<body>
+<button class="no-print" onclick="window.print()">🖨 Print</button>
+<h1>{{ client.name }} – {{ item.title }}</h1>
+<p>Job #{{ job.id }} · {{ job.procedure_name }} · Visit: {{ job.scheduled_date|fmt_date or '________' }}
+  · Team: {{ job.assigned_to or '________________' }}</p>
+<p>Current expiry: {{ item.due_date|fmt_date or '—' }} · New expiry: ________________</p>
+{% if client.site_address or client.contact_name %}
+<p>Site: {{ client.site_address }} {% if client.contact_name %}· Contact: {{ client.contact_name }} {{ client.contact_phone }}{% endif %}</p>
+{% endif %}
+{% if client.access_notes %}<p class="note">{{ client.access_notes }}</p>{% endif %}
+
+<div class="cols">
+  <div>
+    <h2>Software on laptop</h2>
+    <ul class="boxes">{% for r in software %}<li class="{{ 'done' if r.check }}">{{ r.name }}{% if r.details %} <small>– {{ r.details }}</small>{% endif %}</li>{% endfor %}</ul>
+  </div>
+  <div>
+    <h2>Items to bring</h2>
+    <ul class="boxes">{% for r in equipment %}<li class="{{ 'done' if r.check }}">{{ r.name }}{% if r.quantity %} ×{{ r.quantity }}{% endif %}{% if r.details %} <small>– {{ r.details }}</small>{% endif %}</li>{% endfor %}</ul>
+  </div>
+</div>
+
+<h2>Checklist</h2>
+<table>
+  <thead>
+    <tr><th class="num">#</th><th>Step</th>
+      {% if machines %}{% for m in machines %}<th class="mcol">{{ m.name }}</th>{% endfor %}{% else %}<th class="mcol">Done</th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+  {% set n = namespace(i=0) %}
+  {% for section, steps in groups %}
+    {% if section %}<tr class="section"><td colspan="{{ 2 + (machines|length or 1) }}">{{ section }}</td></tr>{% endif %}
+    {% for s in steps %}{% set n.i = n.i + 1 %}
+      <tr>
+        <td class="num">{{ n.i }}</td>
+        <td>{{ s.title }}{% if s.details %}<div class="details">{{ s.details }}</div>{% endif %}</td>
+        {% if s.boxes|length == 1 and not s.boxes[0].machine_id %}
+          <td class="mcol" colspan="{{ machines|length or 1 }}"><span class="box {{ 'done' if s.boxes[0].check }}"></span></td>
+        {% else %}
+          {% for b in s.boxes %}<td class="mcol"><span class="box {{ 'done' if b.check }}"></span></td>{% endfor %}
+        {% endif %}
+      </tr>
+    {% endfor %}
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Notes</h2>
+<div class="lines"></div>
+<p class="footer">Printed from IngatMaintain · tick the boxes online afterwards so the record stays complete.</p>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Checklists{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Checklists</h1>
+  <div class="actions"><a class="button primary" href="{{ url_for('procedures.new') }}">+ New checklist</a></div>
+</div>
+<p class="muted">A checklist is the reusable procedure for a type of maintenance: the steps to cross off,
+  the software needed on your laptop, and what to bring on site. Starting a job copies the checklist,
+  so editing it later won't change jobs already in progress.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Checklist</th><th>Steps</th><th>Packing items</th><th>Used by</th></tr></thead>
+  <tbody>
+  {% for p in procedures %}
+    <tr>
+      <td><a href="{{ url_for('procedures.detail', procedure_id=p.id) }}"><strong>{{ p.name }}</strong></a>
+        {% if p.description %}<br><small class="muted">{{ p.description|truncate(120) }}</small>{% endif %}</td>
+      <td>{{ p.step_count }}</td>
+      <td>{{ p.req_count }}</td>
+      <td>{{ p.item_count }} item{{ 's' if p.item_count != 1 }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">No checklists yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

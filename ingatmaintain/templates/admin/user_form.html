@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ user.username }}{% endblock %}
+{% block content %}
+<h1>{{ user.username }}</h1>
+<form method="post" class="card form">
+  {{ csrf() }}
+  <div class="grid-2">
+    <label>Full name <input name="full_name" value="{{ user.full_name }}"></label>
+    <label>Email <input name="email" type="email" value="{{ user.email }}"></label>
+  </div>
+  <label class="checkbox"><input type="checkbox" name="notify" value="1" {{ 'checked' if user.notify }}> Email reminders</label>
+  <label class="checkbox"><input type="checkbox" name="is_admin" value="1" {{ 'checked' if user.is_admin }}> Admin</label>
+  <label class="checkbox"><input type="checkbox" name="active" value="1" {{ 'checked' if user.active }}> Active (can log in)</label>
+  <label>Reset password <small class="muted">(leave empty to keep)</small> <input name="password" type="password" minlength="8" autocomplete="new-password"></label>
+  <div class="actions">
+    <button class="button primary">Save</button>
+    <a class="button" href="{{ url_for('admin.settings') }}#users">Cancel</a>
+  </div>
+</form>
+{% endblock %}

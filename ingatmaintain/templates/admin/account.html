@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}My account{% endblock %}
+{% block content %}
+<h1>My account <small class="muted">· {{ current_user.username }}</small></h1>
+<form method="post" class="card form">
+  {{ csrf() }}
+  <div class="grid-2">
+    <label>Full name <input name="full_name" value="{{ current_user.full_name }}"></label>
+    <label>Email <input name="email" type="email" value="{{ current_user.email }}"></label>
+  </div>
+  <label class="checkbox"><input type="checkbox" name="notify" value="1" {{ 'checked' if current_user.notify }}> Email me maintenance reminders</label>
+  <h2>Change password</h2>
+  <div class="grid-2">
+    <label>Current password <input name="current_password" type="password" autocomplete="current-password"></label>
+    <label>New password <input name="new_password" type="password" minlength="8" autocomplete="new-password"></label>
+  </div>
+  <button class="button primary">Save</button>
+</form>
+{% endblock %}

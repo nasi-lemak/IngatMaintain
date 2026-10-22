@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Start job{% endblock %}
+{% block content %}
+<h1>Start job <small class="muted">· {{ item.client_name }} – {{ item.title }}</small></h1>
+<form method="post" class="card form">
+  {{ csrf() }}
+  <label>Job title <input name="title" value="{{ item.title }} – {{ item.client_name }}"></label>
+  <div class="grid-2">
+    <label>Checklist *
+      <select name="procedure_id" required>
+        <option value="">Choose…</option>
+        {% for p in procedures %}<option value="{{ p.id }}" {{ 'selected' if p.id == item.procedure_id }}>{{ p.name }}</option>{% endfor %}
+      </select>
+      {% if not procedures %}<small><a href="{{ url_for('procedures.new') }}">Create a checklist first</a></small>{% endif %}
+    </label>
+    <label>Planned visit date <input type="date" name="scheduled_date"></label>
+  </div>
+  <fieldset>
+    <legend>Computers this job covers</legend>
+    {% for m in machines %}
+      <label class="checkbox"><input type="checkbox" name="machine_ids" value="{{ m.id }}" checked> {{ m.name }}
+        <small class="muted">{{ [m.hostname, m.ip_address]|select|join(' · ') }}</small></label>
+    {% else %}
+      <p class="muted">No computers recorded for this client – <a href="{{ url_for('clients.detail', client_id=item.client_id) }}#machines">add them</a> to get one tick box per computer.</p>
+    {% endfor %}
+  </fieldset>
+  <fieldset>
+    <legend>Who's going</legend>
+    {% for u in users %}{% set n = u.full_name or u.username %}
+      <label class="checkbox"><input type="checkbox" name="assigned_to" value="{{ n }}" {{ 'checked' if u.id == current_user.id }}> {{ n }}</label>
+    {% endfor %}
+  </fieldset>
+  <div class="actions">
+    <button class="button primary">Start job</button>
+    <a class="button" href="{{ url_for('items.detail', item_id=item.id) }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

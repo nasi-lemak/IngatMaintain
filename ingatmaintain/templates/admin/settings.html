@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+<section class="card">
+  <h2>Reminders</h2>
+  <p>Checked automatically every day at <strong>{{ '%02d'|format(reminder_hour) }}:00</strong> ({{ timezone }}) and when the server starts.
+    Each item reminds at each of its "days before" marks, then weekly once overdue.</p>
+  <ul class="plain">
+    <li>Email: {% if smtp_host %}✅ via {{ smtp_host }} → {{ recipients|join(', ') or '⚠ no users with an email address and reminders turned on' }}{% else %}⬜ not set up (SMTP_HOST){% endif %}</li>
+    <li>Telegram: {{ '✅ configured' if telegram else '⬜ not set up (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)' }}</li>
+    <li>Webhook (Slack / Teams / Google Chat): {{ '✅ configured' if webhook else '⬜ not set up (WEBHOOK_URL)' }}</li>
+  </ul>
+  {% if last_run %}<p class="muted small">Last check: {{ last_run }}</p>{% endif %}
+  <p class="muted small">Channels are configured with environment variables on the server – see the README.</p>
+  <div class="actions">
+    <form method="post" action="{{ url_for('admin.test_notification') }}" class="inline">{{ csrf() }}<button class="button">Send test notification</button></form>
+    <form method="post" action="{{ url_for('admin.run_reminders_now') }}" class="inline">{{ csrf() }}<button class="button">Check reminders now</button></form>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Calendar feed</h2>
+  <p>Subscribe to this link in Google Calendar / Outlook ("Add calendar → From URL") to see every expiry date
+    and planned site visit in your calendar.</p>
+  <input class="copy" readonly value="{{ calendar_url }}" onclick="this.select()">
+  <p class="muted small">Anyone with the link can see the calendar.</p>
+  <form method="post" action="{{ url_for('admin.reset_calendar_token') }}" class="inline"
+        data-confirm="Create a new link? Existing calendar subscriptions will stop updating.">
+    {{ csrf() }}<button class="button small">Create new link</button>
+  </form>
+</section>
+
+<section class="card" id="users">
+  <h2>Team</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Reminders</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr class="{{ 'muted' if not u.active }}">
+        <td><strong>{{ u.username }}</strong>{% if u.full_name %}<br><small>{{ u.full_name }}</small>{% endif %}</td>
+        <td>{{ u.email or '—' }}</td>
+        <td>{{ 'Admin' if u.is_admin else 'Maintainer' }}{% if not u.active %} (inactive){% endif %}</td>
+        <td>{{ 'On' if u.notify else 'Off' }}</td>
+        <td><a href="{{ url_for('admin.edit_user', user_id=u.id) }}">Edit</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <details>
+    <summary>Add a team member</summary>
+    <form method="post" action="{{ url_for('admin.add_user') }}" class="form">
+      {{ csrf() }}
+      <div class="grid-2">
+        <label>Username * <input name="username" required></label>
+        <label>Full name <input name="full_name"></label>
+        <label>Email <input name="email" type="email"></label>
+        <label>Temporary password * <input name="password" type="password" minlength="8" required></label>
+      </div>
+      <label class="checkbox"><input type="checkbox" name="is_admin" value="1"> Admin (manage users and settings)</label>
+      <button class="button">Add user</button>
+    </form>
+  </details>
+</section>
+
+<section class="card">
+  <h2>Example data</h2>
+  <p>Loads NHG Khatib Polyclinic with 5 computers, the SSL certificate expiring 21 Oct 2028, and the full renewal checklist.</p>
+  <form method="post" action="{{ url_for('admin.seed_example') }}">{{ csrf() }}<button class="button small">Load example</button></form>
+</section>
+{% endblock %}

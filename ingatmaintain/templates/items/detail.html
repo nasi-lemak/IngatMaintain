@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, job_status, csrf %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('clients.detail', client_id=item.client_id) }}">{{ item.client_name }}</a> /</p>
+<div class="page-head">
+  <h1>{{ item.title }}</h1>
+  <div class="actions">
+    <a class="button" href="{{ url_for('items.edit', item_id=item.id) }}">Edit</a>
+    {% if item.open_job_id %}
+      <a class="button primary" href="{{ url_for('jobs.detail', job_id=item.open_job_id) }}">Open job #{{ item.open_job_id }}</a>
+    {% elif not item.archived %}
+      <a class="button primary" href="{{ url_for('jobs.start', item_id=item.id) }}">Start job</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="big-status status-{{ item.status.key }}">
+      <div class="big-date">{{ item.due_date|fmt_date or 'No due date' }}</div>
+      {{ status_badge(item.status) }}
+      {% if item.archived %}<span class="badge">Archived</span>{% endif %}
+    </div>
+    <dl class="facts">
+      <dt>Category</dt><dd>{{ item.category or '—' }}</dd>
+      <dt>Checklist</dt><dd>{% if item.procedure_id %}<a href="{{ url_for('procedures.detail', procedure_id=item.procedure_id) }}">{{ item.procedure_name }}</a>{% else %}—{% endif %}</dd>
+      <dt>Reminders</dt><dd>{{ item.reminder_days.replace(',', ', ') }} days before, then weekly if overdue</dd>
+      {% if item.recurrence_months %}<dt>Repeats</dt><dd>every {{ item.recurrence_months }} months</dd>{% endif %}
+    </dl>
+    {% if item.notes %}<p class="pre">{{ item.notes }}</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Reminders sent</h2>
+    <ul class="plain">
+      {% for r in reminders %}
+        <li>{{ r.sent_at }} – {% if r.threshold < 0 %}overdue (week {{ -r.threshold }}){% else %}{{ r.threshold }}-day reminder{% endif %}
+          for {{ r.due_date|fmt_date }} <small class="muted">via {{ r.channels }}</small></li>
+      {% else %}
+        <li class="muted">None yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<section>
+  <h2>Job history</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Job</th><th>Visit date</th><th>Completed</th><th>Status</th><th>Expiry change</th></tr></thead>
+    <tbody>
+    {% for j in jobs %}
+      <tr>
+        <td><a href="{{ url_for('jobs.detail', job_id=j.id) }}">#{{ j.id }} {{ j.title }}</a><br>
+          <small class="muted">{{ j.procedure_name }} · started {{ j.created_at }} by {{ j.created_by }}</small></td>
+        <td class="nowrap">{{ j.scheduled_date|fmt_date or '—' }}</td>
+        <td class="nowrap">{% if j.status == 'completed' %}{{ j.completed_at }}<br><small class="muted">by {{ j.completed_by }}</small>{% else %}—{% endif %}</td>
+        <td>{{ job_status(j) }}</td>
+        <td class="nowrap">{% if j.status == 'completed' %}{{ j.previous_due_date|fmt_date or '—' }} → {{ j.new_due_date|fmt_date or 'archived' }}{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted">No jobs yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card subtle">
+  <form method="post" action="{{ url_for('items.archive', item_id=item.id) }}" class="inline">
+    {{ csrf() }}
+    <input type="hidden" name="archived" value="{{ 0 if item.archived else 1 }}">
+    <button class="button small">{{ 'Restore item' if item.archived else 'Archive (stop reminders)' }}</button>
+  </form>
+  {% if current_user.is_admin %}
+  <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" class="inline"
+        data-confirm="Delete this item and all its job history? Archiving is usually better.">
+    {{ csrf() }}<button class="button small danger">Delete</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

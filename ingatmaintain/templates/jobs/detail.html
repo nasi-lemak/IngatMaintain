@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% from "_macros.html" import job_status, csrf %}
+{% block title %}Job #{{ job.id }}{% endblock %}
+{% block content %}
+<p class="crumbs">
+  <a href="{{ url_for('clients.detail', client_id=client.id) }}">{{ client.name }}</a> /
+  <a href="{{ url_for('items.detail', item_id=item.id) }}">{{ item.title }}</a> /
+</p>
+<div class="page-head">
+  <h1>Job #{{ job.id }} {{ job_status(job) }}</h1>
+  <div class="actions">
+    <a class="button" href="{{ url_for('jobs.print_view', job_id=job.id) }}" target="_blank">🖨 Print checklist</a>
+    {% if job.status == 'open' %}
+      <a class="button primary" href="{{ url_for('jobs.complete', job_id=job.id) }}">Complete job</a>
+    {% endif %}
+  </div>
+</div>
+<p class="muted">{{ job.title }} · checklist: {{ job.procedure_name }} · current expiry {{ item.due_date|fmt_date or '—' }}</p>
+
+<div class="job-progress card" data-job-progress>
+  {% set pct = (100 * job.done / job.total)|round|int if job.total else 0 %}
+  <div class="progress big"><div class="progress-bar" style="width: {{ pct }}%"></div></div>
+  <span><strong data-progress-text>{{ job.done }}/{{ job.total }}</strong> ticked</span>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Visit</h2>
+    <form method="post" action="{{ url_for('jobs.update', job_id=job.id) }}" class="form">
+      {{ csrf() }}
+      <label>Visit date <input type="date" name="scheduled_date" value="{{ job.scheduled_date or '' }}"></label>
+      <fieldset>
+        <legend>Assigned</legend>
+        {% set assigned = job.assigned_to.split(', ') %}
+        {% for u in users %}{% set n = u.full_name or u.username %}
+          <label class="checkbox"><input type="checkbox" name="assigned_to" value="{{ n }}" {{ 'checked' if n in assigned }}> {{ n }}</label>
+        {% endfor %}
+      </fieldset>
+      <button class="button small">Save visit details</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Site</h2>
+    <dl class="facts">
+      <dt>Address</dt><dd>{{ client.site_address or '—' }}</dd>
+      <dt>Contact</dt><dd>{{ client.contact_name or '—' }}
+        {% if client.contact_phone %}· <a href="tel:{{ client.contact_phone }}">{{ client.contact_phone }}</a>{% endif %}</dd>
+    </dl>
+    {% if client.access_notes %}<p class="pre callout">{{ client.access_notes }}</p>{% endif %}
+    <h3>Computers in this job ({{ machines|length }})</h3>
+    <ul class="plain small">
+      {% for m in machines %}{% set cm = client_machines.get(m.machine_id) %}
+        <li><strong>{{ m.name }}</strong>{% if cm %} <span class="muted">{{ [cm.hostname, cm.ip_address, cm.location]|select|join(' · ') }}</span>{% endif %}</li>
+      {% else %}<li class="muted">No computers selected – per-computer steps have a single box.</li>{% endfor %}
+    </ul>
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>💻 Software on our laptop</h2>
+    {% for r in software %}
+      <div class="check-row" id="req-{{ r.id }}">
+        {% with kind='req', ref_id=r.id, machine_id=0, label=None, check=r.check %}{% include "jobs/_check.html" %}{% endwith %}
+        <div><strong>{{ r.name }}</strong>{% if r.details %}<br><small class="muted">{{ r.details }}</small>{% endif %}</div>
+      </div>
+    {% else %}<p class="muted">Nothing listed.</p>{% endfor %}
+  </section>
+  <section class="card">
+    <h2>🎒 Items to bring</h2>
+    {% for r in equipment %}
+      <div class="check-row" id="req-{{ r.id }}">
+        {% with kind='req', ref_id=r.id, machine_id=0, label=None, check=r.check %}{% include "jobs/_check.html" %}{% endwith %}
+        <div><strong>{{ r.name }}</strong>{% if r.quantity %} ×{{ r.quantity }}{% endif %}{% if r.details %}<br><small class="muted">{{ r.details }}</small>{% endif %}</div>
+      </div>
+    {% else %}<p class="muted">Nothing listed.</p>{% endfor %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>Checklist</h2>
+  {% set n = namespace(i=0) %}
+  {% for section, steps in groups %}
+    {% if section %}<h3 class="section-title">{{ section }}</h3>{% endif %}
+    {% for s in steps %}{% set n.i = n.i + 1 %}
+      <div class="step {{ 'step-done' if s.done }}" id="step-{{ s.id }}">
+        {% if s.boxes|length == 1 and not s.boxes[0].machine_id %}
+          <div class="check-row">
+            {% with kind='step', ref_id=s.id, machine_id=0, label=None, check=s.boxes[0].check %}{% include "jobs/_check.html" %}{% endwith %}
+            <div class="step-text"><span class="step-no">{{ n.i }}.</span> <strong>{{ s.title }}</strong>
+              {% if s.details %}<div class="pre muted small">{{ s.details }}</div>{% endif %}</div>
+          </div>
+        {% else %}
+          <div class="step-text"><span class="step-no">{{ n.i }}.</span> <strong>{{ s.title }}</strong> <span class="badge">each computer</span>
+            {% if s.details %}<div class="pre muted small">{{ s.details }}</div>{% endif %}</div>
+          <div class="machine-checks">
+            {% for b in s.boxes %}
+              {% with kind='step', ref_id=s.id, machine_id=b.machine_id, label=b.machine_name, check=b.check %}{% include "jobs/_check.html" %}{% endwith %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+</section>
+
+<section class="card" id="notes">
+  <h2>Notes & log</h2>
+  <form method="post" action="{{ url_for('jobs.add_note', job_id=job.id) }}" class="form">
+    {{ csrf() }}
+    <textarea name="body" rows="2" placeholder="e.g. CSRs sent to Synapxe, ticket #12345. Computer 3 was offline – return Tuesday."></textarea>
+    <button class="button small">Add note</button>
+  </form>
+  <ul class="log">
+    {% for note in notes %}
+      <li><small class="muted">{{ note.created_at }} · {{ note.author }}</small><div class="pre">{{ note.body }}</div></li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card subtle">
+  <form method="post" action="{{ url_for('jobs.set_status', job_id=job.id) }}" class="inline"
+        {% if job.status == 'open' %}data-confirm="Cancel this job? The item's due date stays unchanged."{% endif %}>
+    {{ csrf() }}
+    {% if job.status == 'open' %}
+      <input type="hidden" name="action" value="cancel"><button class="button small">Cancel job</button>
+    {% else %}
+      <input type="hidden" name="action" value="reopen"><button class="button small">Reopen job</button>
+      {% if job.status == 'completed' %}<small class="muted">Reopening doesn't undo the new due date – edit the item if needed.</small>{% endif %}
+    {% endif %}
+  </form>
+</section>
+{% endblock %}

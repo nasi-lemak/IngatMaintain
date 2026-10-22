@@ -1,0 +1,12 @@
+{# One tick box. Expects: job, kind, ref_id, machine_id, label, check #}
+<form method="post" action="{{ url_for('jobs.toggle', job_id=job.id) }}" class="check-form" data-toggle>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <input type="hidden" name="ref_id" value="{{ ref_id }}">
+  <input type="hidden" name="machine_id" value="{{ machine_id }}">
+  <button class="check {{ 'checked' if check }}" {{ 'disabled' if job.status != 'open' }}
+          aria-pressed="{{ 'true' if check else 'false' }}">
+    <span class="box" aria-hidden="true"></span>{% if label %}<span class="check-label">{{ label }}</span>{% endif %}
+  </button>
+  <small class="who">{% if check %}{{ check.checked_by }} · {{ check.checked_at }}{% endif %}</small>
+</form>

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, progress %}
+{% block title %}Complete job #{{ job.id }}{% endblock %}
+{% block content %}
+<h1>Complete job #{{ job.id }}</h1>
+<p>{{ job.title }}</p>
+<div class="card">{{ progress(job.done, job.total) }}</div>
+<form method="post" class="card form">
+  {{ csrf() }}
+  <label>New expiry / next due date for <strong>{{ item.title }}</strong>
+    <input type="date" name="next_due_date" value="{{ request.form.next_due_date or suggested or '' }}">
+    <small class="muted">Currently {{ item.due_date|fmt_date or 'not set' }}.
+      For certificates, use the expiry date on the new certificate. Reminders restart from this date.</small>
+  </label>
+  <label class="checkbox"><input type="checkbox" name="retire" value="1"> No next date – archive this item (e.g. system decommissioned)</label>
+  <label>Summary (optional) <textarea name="summary" rows="3" placeholder="Anything the next team should know"></textarea></label>
+  {% if job.done < job.total %}
+    <label class="checkbox warn"><input type="checkbox" name="force" value="1">
+      Complete anyway – {{ job.total - job.done }} box{{ 'es' if job.total - job.done != 1 }} still unticked</label>
+  {% endif %}
+  <div class="actions">
+    <button class="button primary">Complete job</button>
+    <a class="button" href="{{ url_for('jobs.detail', job_id=job.id) }}">Back to checklist</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro status_badge(status) -%}
+  <span class="badge badge-{{ status.key }}">{{ status.label }}</span>
+{%- endmacro %}
+
+{% macro progress(done, total) -%}
+  {% set pct = (100 * done / total)|round|int if total else 0 %}
+  <div class="progress" title="{{ done }} of {{ total }} ticked">
+    <div class="progress-bar" style="width: {{ pct }}%"></div>
+  </div>
+  <small class="muted"><span data-progress-text>{{ done }}/{{ total }}</span> ticked</small>
+{%- endmacro %}
+
+{% macro job_status(job) -%}
+  <span class="badge badge-job-{{ job.status }}">{{ job.status|capitalize }}</span>
+{%- endmacro %}
+
+{% macro items_table(items, show_client=true) %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      {% if show_client %}<th>Client</th>{% endif %}
+      <th>Item</th><th>Due / expiry</th><th>Status</th><th>Job</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for i in items %}
+    <tr>
+      {% if show_client %}<td><a href="{{ url_for('clients.detail', client_id=i.client_id) }}">{{ i.client_name }}</a></td>{% endif %}
+      <td><a href="{{ url_for('items.detail', item_id=i.id) }}"><strong>{{ i.title }}</strong></a>
+        {% if i.category %}<br><small class="muted">{{ i.category }}</small>{% endif %}</td>
+      <td class="nowrap">{{ i.due_date|fmt_date or '—' }}</td>
+      <td>{{ status_badge(i.status) }}</td>
+      <td class="nowrap">
+        {% if i.open_job_id %}
+          <a href="{{ url_for('jobs.detail', job_id=i.open_job_id) }}">Job #{{ i.open_job_id }} →</a>
+        {% elif not i.archived %}
+          <a class="button small" href="{{ url_for('jobs.start', item_id=i.id) }}">Start job</a>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">Nothing here.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% macro jobs_table(jobs) %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Job</th><th>Client</th><th>Visit date</th><th>Assigned</th><th>Progress</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for j in jobs %}
+    <tr>
+      <td><a href="{{ url_for('jobs.detail', job_id=j.id) }}"><strong>#{{ j.id }} {{ j.title }}</strong></a></td>
+      <td>{{ j.client_name }}</td>
+      <td class="nowrap">{{ j.scheduled_date|fmt_date or '—' }}</td>
+      <td>{{ j.assigned_to or '—' }}</td>
+      <td class="progress-cell">{{ progress(j.done, j.total) }}</td>
+      <td>{{ job_status(j) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No jobs.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import items_table, jobs_table, csrf %}
+{% block title %}{{ client.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ client.name }}</h1>
+  <div class="actions">
+    <a class="button" href="{{ url_for('clients.edit', client_id=client.id) }}">Edit</a>
+    <a class="button primary" href="{{ url_for('items.new', client=client.id) }}">+ Maintenance item</a>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Site</h2>
+    <dl class="facts">
+      <dt>Address</dt><dd>{{ client.site_address or '—' }}</dd>
+      <dt>Contact</dt><dd>{{ client.contact_name or '—' }}
+        {% if client.contact_phone %}· <a href="tel:{{ client.contact_phone }}">{{ client.contact_phone }}</a>{% endif %}
+        {% if client.contact_email %}· <a href="mailto:{{ client.contact_email }}">{{ client.contact_email }}</a>{% endif %}</dd>
+    </dl>
+    {% if client.access_notes %}<h3>Access notes</h3><p class="pre">{{ client.access_notes }}</p>{% endif %}
+    {% if client.notes %}<h3>Notes</h3><p class="pre">{{ client.notes }}</p>{% endif %}
+  </section>
+
+  <section class="card" id="machines">
+    <h2>Computers on site ({{ machines|length }})</h2>
+    <ul class="machine-list">
+      {% for m in machines %}
+      <li>
+        <div>
+          <strong>{{ m.name }}</strong>
+          <small class="muted">{{ [m.hostname, m.ip_address, m.location, m.os]|select|join(' · ') }}</small>
+          {% if m.notes %}<br><small>{{ m.notes }}</small>{% endif %}
+        </div>
+        <div class="row-actions">
+          <a href="{{ url_for('clients.edit_machine', machine_id=m.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('clients.delete_machine', machine_id=m.id) }}" class="inline"
+                data-confirm="Remove {{ m.name }}?">
+            {{ csrf() }}<button class="link danger-text">Remove</button>
+          </form>
+        </div>
+      </li>
+      {% else %}
+      <li class="muted">No computers recorded yet.</li>
+      {% endfor %}
+    </ul>
+    <details {% if not machines %}open{% endif %}>
+      <summary>Add a computer</summary>
+      <form method="post" action="{{ url_for('clients.add_machine', client_id=client.id) }}" class="form">
+        {{ csrf() }}
+        <div class="grid-2">
+          <label>Name * <input name="name" required placeholder="e.g. Computer 1 / Triage PC"></label>
+          <label>Hostname <input name="hostname"></label>
+          <label>IP address <input name="ip_address"></label>
+          <label>Location <input name="location" placeholder="e.g. Level 2, room 3"></label>
+          <label>OS <input name="os" placeholder="e.g. Windows 10"></label>
+          <label>Notes <input name="notes"></label>
+        </div>
+        <button class="button">Add computer</button>
+      </form>
+    </details>
+  </section>
+</div>
+
+<section>
+  <h2>Maintenance items</h2>
+  {{ items_table(items, show_client=false) }}
+</section>
+
+<section>
+  <h2>Jobs</h2>
+  {{ jobs_table(jobs) }}
+</section>
+{% endblock %}

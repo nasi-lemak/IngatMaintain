@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ client.name or 'New client' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit ' ~ client.name if client.id else 'New client' }}</h1>
+<form method="post" class="card form">
+  {{ csrf() }}
+  <label>Client / site name * <input name="name" value="{{ client.name or '' }}" required placeholder="e.g. NHG Khatib Polyclinic"></label>
+  <label>Site address <input name="site_address" value="{{ client.site_address or '' }}"></label>
+  <div class="grid-3">
+    <label>Contact person <input name="contact_name" value="{{ client.contact_name or '' }}"></label>
+    <label>Contact phone <input name="contact_phone" value="{{ client.contact_phone or '' }}"></label>
+    <label>Contact email <input name="contact_email" type="email" value="{{ client.contact_email or '' }}"></label>
+  </div>
+  <label>Site access notes
+    <textarea name="access_notes" rows="3" placeholder="Registration at front counter, escort needed, server room location, permitted hours...">{{ client.access_notes or '' }}</textarea>
+  </label>
+  <label>Other notes <textarea name="notes" rows="3">{{ client.notes or '' }}</textarea></label>
+  <p class="muted small">Don't store passwords here – keep them in your password manager.</p>
+  <div class="actions">
+    <button class="button primary">Save</button>
+    <a class="button" href="{{ url_for('clients.detail', client_id=client.id) if client.id else url_for('clients.index') }}">Cancel</a>
+  </div>
+</form>
+
+{% if client.id and current_user.is_admin %}
+<form method="post" action="{{ url_for('clients.delete', client_id=client.id) }}" class="card danger-zone">
+  {{ csrf() }}
+  <h2>Delete client</h2>
+  <p>This permanently deletes the client, its computers, maintenance items and job history.
+    Type <strong>{{ client.name }}</strong> to confirm.</p>
+  <input name="confirm_name" autocomplete="off">
+  <button class="button danger">Delete client</button>
+</form>
+{% endif %}
+{% endblock %}

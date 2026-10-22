@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import items_table, jobs_table, csrf %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Dashboard</h1>
+  <div class="actions">
+    <a class="button" href="{{ url_for('items.new') }}">+ Maintenance item</a>
+  </div>
+</div>
+
+{% if not has_clients %}
+<section class="card empty">
+  <h2>Get started</h2>
+  <ol>
+    <li><a href="{{ url_for('clients.new') }}">Add a client</a> and the computers installed at their site.</li>
+    <li><a href="{{ url_for('procedures.new') }}">Create a checklist</a> – the steps, laptop software and items to bring.</li>
+    <li><a href="{{ url_for('items.new') }}">Add a maintenance item</a> (e.g. an SSL certificate) with its expiry date.</li>
+  </ol>
+  {% if current_user.is_admin %}
+  <form method="post" action="{{ url_for('admin.seed_example') }}">
+    {{ csrf() }}
+    <button class="button">Load example: NHG Khatib Polyclinic SSL renewal</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+<div class="tiles">
+  <a class="tile tile-overdue" href="{{ url_for('items.index', status='overdue') }}"><b>{{ counts.overdue }}</b>Overdue</a>
+  <a class="tile tile-urgent" href="{{ url_for('items.index', status='urgent') }}"><b>{{ counts.urgent }}</b>Due ≤ 30 days</a>
+  <a class="tile tile-upcoming" href="{{ url_for('items.index', status='upcoming') }}"><b>{{ counts.upcoming }}</b>Plan now</a>
+  <a class="tile tile-ok" href="{{ url_for('items.index', status='ok') }}"><b>{{ counts.ok }}</b>OK</a>
+</div>
+
+<section>
+  <h2>Needs attention</h2>
+  {% if attention %}
+    {{ items_table(attention) }}
+  {% else %}
+    <p class="muted">Nothing is inside its reminder window. 🎉</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Jobs in progress</h2>
+  {% if open_jobs %}{{ jobs_table(open_jobs) }}{% else %}<p class="muted">No open jobs.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Later</h2>
+  {% if later %}{{ items_table(later) }}{% else %}<p class="muted">—</p>{% endif %}
+</section>
+
+<p class="muted small">
+  Reminders:
+  {% if channels %}sending via {{ channels|join(', ') }}.{% else %}<strong>no email/chat channel configured</strong> – only this dashboard will show them.{% endif %}
+  {% if last_run %}Last check: {{ last_run }}{% endif %}
+</p>
+{% endblock %}

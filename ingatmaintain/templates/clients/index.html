@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Clients{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Clients</h1>
+  <div class="actions"><a class="button primary" href="{{ url_for('clients.new') }}">+ Add client</a></div>
+</div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Client</th><th>Computers</th><th>Maintenance items</th><th>Next due</th></tr></thead>
+  <tbody>
+  {% for c in clients %}
+    <tr>
+      <td><a href="{{ url_for('clients.detail', client_id=c.id) }}"><strong>{{ c.name }}</strong></a>
+        {% if c.site_address %}<br><small class="muted">{{ c.site_address }}</small>{% endif %}</td>
+      <td>{{ c.machine_count }}</td>
+      <td>{{ c.item_count }}</td>
+      <td class="nowrap">{{ c.next_due|fmt_date or '—' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">No clients yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
