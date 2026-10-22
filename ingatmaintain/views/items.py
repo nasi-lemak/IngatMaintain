@@ -125,6 +125,8 @@ def new():
     else:
         item = {
             "client_id": request.args.get("client", type=int),
+            "title": request.args.get("title", ""),
+            "category": request.args.get("category", ""),
             "reminder_days": DEFAULT_REMINDER_DAYS,
             "procedure_id": None,
         }

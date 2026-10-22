@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ 'Edit ' ~ sw.name if software_id else 'Add software' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit ' ~ sw.name if software_id else 'Add software' }}</h1>
+<form method="post" class="card form">
+  {{ csrf() }}
+  <label>Name * <input name="name" value="{{ sw.name or '' }}" required placeholder="e.g. Clinic queue app, Mosquitto"></label>
+  {% if not software_id %}
+  <label>Current latest version <small class="muted">optional – you can add releases later</small>
+    <input name="version" value="{{ sw.version or '' }}" placeholder="e.g. 2.4.1"></label>
+  {% endif %}
+  <label>Notes <textarea name="notes" rows="3" placeholder="Where to get the installer, install path, how to check the version...">{{ sw.notes or '' }}</textarea></label>
+  <div class="actions">
+    <button class="button primary">Save</button>
+    <a class="button" href="{{ url_for('software.detail', software_id=software_id) if software_id else url_for('software.index') }}">Cancel</a>
+  </div>
+</form>
+{% if software_id and current_user.is_admin %}
+<form method="post" action="{{ url_for('software.delete', software_id=software_id) }}" class="card subtle"
+      data-confirm="Delete this software and every version record for it?">
+  {{ csrf() }}<button class="button small danger">Delete software</button>
+</form>
+{% endif %}
+{% endblock %}

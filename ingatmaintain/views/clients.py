@@ -4,6 +4,7 @@ from ..auth import admin_required
 from ..db import get_db
 from .items import load_items
 from .jobs import load_jobs
+from .software import deployment_link, history, outdated, version_grid
 
 bp = Blueprint("clients", __name__, url_prefix="/clients")
 
@@ -73,7 +74,13 @@ def detail(client_id):
     machines = conn.execute("SELECT * FROM machines WHERE client_id = ? ORDER BY name", (client_id,)).fetchall()
     items = load_items(conn, "i.client_id = ? AND i.archived = 0", (client_id,))
     jobs = load_jobs(conn, "i.client_id = ?", (client_id,), limit=20)
-    return render_template("clients/detail.html", client=client, machines=machines, items=items, jobs=jobs)
+    version_columns, version_rows = version_grid(conn, [dict(m) for m in machines])
+    return render_template(
+        "clients/detail.html", client=client, machines=machines, items=items, jobs=jobs,
+        version_columns=version_columns, version_rows=version_rows,
+        outdated=outdated(conn, client_id=client_id), deployment_link=deployment_link,
+        version_changes=history(conn, "c.id = ?", (client_id,), limit=10),
+    )
 
 
 @bp.route("/<int:client_id>/edit", methods=["GET", "POST"])

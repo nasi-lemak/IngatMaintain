@@ -217,7 +217,17 @@ def start(item_id):
 def detail(job_id):
     conn = get_db()
     job = get_job(job_id)
-    return render_template("jobs/detail.html", job=job, users=_users(conn).fetchall(), **load_job_detail(conn, job))
+    from .software import version_grid  # software imports this module
+
+    machines = [dict(m) for m in conn.execute(
+        """SELECT m.* FROM job_machines jm JOIN machines m ON m.id = jm.machine_id
+           WHERE jm.job_id = ? ORDER BY jm.position""",
+        (job_id,),
+    )]
+    version_columns, version_rows = version_grid(conn, machines)
+    return render_template("jobs/detail.html", job=job, users=_users(conn).fetchall(),
+                           version_columns=version_columns, version_rows=version_rows,
+                           **load_job_detail(conn, job))
 
 
 @bp.route("/<int:job_id>/print")

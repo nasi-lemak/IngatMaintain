@@ -1,6 +1,7 @@
 """Date helpers and maintenance status rules."""
 
 import calendar
+import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -11,6 +12,7 @@ URGENT_DAYS = 30
 
 CATEGORIES = [
     "SSL certificate",
+    "Software deployment",
     "Software licence",
     "OS / security patching",
     "Antivirus / definitions",
@@ -129,3 +131,33 @@ def fmt_date(value):
     except ValueError:
         return value
     return f"{d.day} {d.strftime('%b %Y')}"
+
+
+def version_key(version):
+    """Sort key for version strings.
+
+    '2.10.1' > '2.9', 'v1.2' == '1.2' == '1.2.0', and pre-releases sort before
+    the release: '2.4.0-rc1' < '2.4.0' < '2.4.0.1'.
+    """
+    v = (version or "").strip().lower().lstrip("v")
+    parts = [(2, int(p), "") if p.isdigit() else (0, 0, p) for p in re.findall(r"\d+|[a-z]+", v)]
+    # Zeros not followed by another number don't count (1.2.0 == 1.2, 2.4.0-rc1 == 2.4-rc1).
+    # Walk right to left so 1.0.0 collapses to 1.
+    key, next_is_number = [], False
+    for part in reversed(parts):
+        if part == (2, 0, "") and not next_is_number:
+            continue
+        key.append(part)
+        next_is_number = part[0] == 2
+    end = (1, 0, "")  # sorts above pre-release tags, below any further number
+    return tuple(reversed(key)) + (end,)
+
+
+def version_status(installed, latest):
+    """current / behind / ahead / unknown (no release recorded yet)."""
+    if not latest:
+        return "unknown"
+    a, b = version_key(installed), version_key(latest)
+    if a == b:
+        return "current"
+    return "behind" if a < b else "ahead"

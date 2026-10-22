@@ -192,3 +192,47 @@ CREATE TABLE IF NOT EXISTS reminder_log (
     channels  TEXT NOT NULL DEFAULT '',
     UNIQUE (item_id, due_date, threshold)
 );
+
+-- Software we deploy to client sites (our own apps, Mosquitto, ...).
+CREATE TABLE IF NOT EXISTS software (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    notes      TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Released versions. The highest version is the one sites should be on.
+CREATE TABLE IF NOT EXISTS software_releases (
+    id          INTEGER PRIMARY KEY,
+    software_id INTEGER NOT NULL REFERENCES software(id) ON DELETE CASCADE,
+    version     TEXT NOT NULL,
+    released_on TEXT,
+    notes       TEXT NOT NULL DEFAULT '',
+    UNIQUE (software_id, version)
+);
+
+-- What is installed on each client computer right now.
+CREATE TABLE IF NOT EXISTS installations (
+    id          INTEGER PRIMARY KEY,
+    machine_id  INTEGER NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
+    software_id INTEGER NOT NULL REFERENCES software(id) ON DELETE CASCADE,
+    version     TEXT NOT NULL,
+    updated_on  TEXT NOT NULL,          -- date it was deployed / last confirmed
+    updated_by  TEXT NOT NULL DEFAULT '',
+    UNIQUE (machine_id, software_id)
+);
+
+-- Every version change: who, when, and on which job (if any).
+CREATE TABLE IF NOT EXISTS version_history (
+    id          INTEGER PRIMARY KEY,
+    machine_id  INTEGER NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
+    software_id INTEGER NOT NULL REFERENCES software(id) ON DELETE CASCADE,
+    old_version TEXT NOT NULL DEFAULT '',   -- '' = not installed before
+    new_version TEXT NOT NULL DEFAULT '',   -- '' = removed
+    changed_on  TEXT NOT NULL,
+    changed_by  TEXT NOT NULL,
+    job_id      INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+    note        TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_version_history_machine ON version_history(machine_id);
+CREATE INDEX IF NOT EXISTS idx_version_history_software ON version_history(software_id);

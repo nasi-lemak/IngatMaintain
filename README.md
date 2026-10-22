@@ -27,11 +27,31 @@ Example: the MQTT (Mosquitto) SSL certificates on the 5 computers at
 | **Client** | A site, its contact and access notes, and the **computers** installed there. |
 | **Checklist** | A reusable procedure with ordered steps (grouped into sections, each ticked *once* or *for each computer*), the laptop software it needs and the items to bring. |
 | **Maintenance item** | Something at a client that expires or recurs (SSL certificate, licence, patching…). Has a due/expiry date, reminder days and a default checklist. |
+| **Software / versions** | Products you deploy to sites (your own apps, Mosquitto…), their releases, and which version is on each client computer. |
 | **Job** | One run of a checklist for an item, covering one or more visits. Starting a job copies the checklist, so later edits to the template don't change jobs already in progress. |
 
 A job's page works well on a phone, and every tick saves straight away. If the site
 has no signal (a server room, for example), use **Print checklist** for a paper
 copy, then tick the boxes online afterwards.
+
+### Software versions
+
+Under **Versions**, add each product you deploy and its releases. The highest version
+number counts as the latest. Pre-releases such as `2.4.0-rc1` sort before `2.4.0`.
+
+To record what's installed, open **Record versions** from a client's page, or from
+the job page after a deployment visit. That opens a grid of computers × software:
+- Type the version installed on each computer.
+- To set the same version on every computer at once, fill in **All computers** for that column.
+- Clearing a box means the software was removed.
+
+Only real changes are saved. Each one goes into the version history with the date,
+who recorded it, and the job it was done on.
+
+When you add a new release, every site still on an older version shows up under
+**Sites behind on software** on the dashboard and the Versions page. Its **Plan upgrade**
+button creates a maintenance item ("Upgrade Clinic Queue App to 2.4.0"). From there,
+start a job with a deployment checklist as usual.
 
 ### Visits and rescheduling
 

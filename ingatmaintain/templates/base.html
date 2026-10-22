@@ -17,6 +17,7 @@
     <a href="{{ url_for('items.index') }}" class="{{ 'active' if ep.startswith('items') }}">Maintenance</a>
     <a href="{{ url_for('jobs.index') }}" class="{{ 'active' if ep.startswith('jobs') }}">Jobs</a>
     <a href="{{ url_for('clients.index') }}" class="{{ 'active' if ep.startswith('clients') }}">Clients</a>
+    <a href="{{ url_for('software.index') }}" class="{{ 'active' if ep.startswith('software') }}">Versions</a>
     <a href="{{ url_for('procedures.index') }}" class="{{ 'active' if ep.startswith('procedures') }}">Checklists</a>
     {% if current_user.is_admin %}<a href="{{ url_for('admin.settings') }}" class="{{ 'active' if ep == 'admin.settings' }}">Settings</a>{% endif %}
   </nav>

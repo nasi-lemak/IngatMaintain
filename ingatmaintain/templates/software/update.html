@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Record versions{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ back }}">{{ 'Job #' ~ job.id if job else client.name }}</a> /</p>
+<h1>Record software versions <small class="muted">· {{ client.name }}</small></h1>
+<p class="muted">Type the version now installed on each computer. To deploy the same version everywhere, fill
+  in <em>All computers</em> for that column. Orange boxes are behind the latest release. Only real changes are saved, and each one is logged
+  {%- if job %} against job #{{ job.id }}{% endif %}. Clearing a box means the software was removed.</p>
+
+{% if not rows %}
+  <p class="flash flash-info">No computers recorded{{ ' for this job' if job }} – add them on the
+    <a href="{{ url_for('clients.detail', client_id=client.id) }}#machines">client page</a> first.</p>
+{% else %}
+
+<form method="get" action="{{ action }}" class="filters">
+  {% for c in columns %}<input type="hidden" name="add" value="{{ c.id }}">{% endfor %}
+  <select name="add" aria-label="Add software column">
+    <option value="">+ Add software to this table…</option>
+    {% for s in all_software if s.id not in columns|map(attribute='id')|list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+  </select>
+  <button class="button small">Add column</button>
+  <a class="small" href="{{ url_for('software.new') }}">New software…</a>
+</form>
+
+{% if columns %}
+<form method="post" action="{{ action }}" class="form">
+  {{ csrf() }}
+  {% for c in columns %}<input type="hidden" name="add" value="{{ c.id }}">{% endfor %}
+  <div class="table-wrap">
+  <table class="version-grid">
+    <thead>
+      <tr><th>Computer</th>
+        {% for c in columns %}<th>{{ c.name }}{% if c.latest %}<br><small class="muted">latest {{ c.latest }}</small>{% endif %}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="apply-all"><td><strong>All computers</strong><br><small class="muted">overrides the rows below</small></td>
+        {% for c in columns %}
+          <td><input name="all_{{ c.id }}" list="versions-{{ c.id }}" placeholder="{{ c.latest or 'version' }}" aria-label="{{ c.name }} on all computers"></td>
+        {% endfor %}
+      </tr>
+      {% for r in rows %}
+      <tr><td><strong>{{ r.machine.name }}</strong></td>
+        {% for cell in r.cells %}
+          <td><input name="v_{{ r.machine.id }}_{{ cell.software_id }}" value="{{ cell.version }}"
+                     class="ver-in-{{ cell.status }}" title="{{ 'Behind the latest release' if cell.status == 'behind' }}"
+                     list="versions-{{ cell.software_id }}" aria-label="{{ r.machine.name }}"></td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% for c in columns %}<datalist id="versions-{{ c.id }}">{% for v in c.releases %}<option value="{{ v }}">{% endfor %}</datalist>{% endfor %}
+  <div class="grid-2">
+    <label>Date deployed / checked <input type="date" name="changed_on" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></label>
+    <label>Note <small class="muted">optional</small> <input name="note" placeholder="e.g. Upgraded during quarterly visit"></label>
+  </div>
+  <div class="actions">
+    <button class="button primary">Save versions</button>
+    <a class="button" href="{{ back }}">Cancel</a>
+  </div>
+</form>
+{% else %}
+  <p class="muted">Nothing recorded yet. Use <em>Add software to this table</em> to start.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

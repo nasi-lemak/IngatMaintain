@@ -65,11 +65,11 @@ def create_app(test_config=None):
         app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or _secret_key(data_dir)
 
     from . import auth, db, util
-    from .views import admin, clients, dashboard, items, jobs, procedures, shared
+    from .views import admin, clients, dashboard, items, jobs, procedures, shared, software
 
     db.init_app(app)
     auth.init_app(app)
-    for module in (dashboard, clients, items, procedures, jobs, admin, shared):
+    for module in (dashboard, clients, items, procedures, jobs, admin, shared, software):
         app.register_blueprint(module.bp)
 
     app.jinja_env.filters["fmt_date"] = util.fmt_date

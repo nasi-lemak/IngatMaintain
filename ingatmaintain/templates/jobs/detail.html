@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import job_status, csrf %}
+{% from "_macros.html" import job_status, csrf, version_table %}
 {% block title %}Job #{{ job.id }}{% endblock %}
 {% block content %}
 <p class="crumbs">
@@ -114,6 +114,18 @@
 {% set note_url = url_for('jobs.add_note', job_id=job.id) %}
 {% set can_tick = true %}
 {% include "jobs/_checklist.html" %}
+
+<section class="card" id="versions">
+  <div class="page-head">
+    <h2>Software versions on these computers</h2>
+    {% if machines %}<a class="button small" href="{{ url_for('software.update_job', job_id=job.id) }}">Record versions</a>{% endif %}
+  </div>
+  {% if version_columns %}
+    {{ version_table(version_columns, version_rows) }}
+  {% else %}
+    <p class="muted small">None recorded yet. After deploying, use <em>Record versions</em> so the next visit knows what's installed.</p>
+  {% endif %}
+</section>
 
 <section class="card" id="share">
   <h2>🔗 Share link (no login)</h2>

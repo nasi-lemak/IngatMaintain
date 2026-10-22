@@ -47,6 +47,29 @@
   {% if open_jobs %}{{ jobs_table(open_jobs) }}{% else %}<p class="muted">No open jobs.</p>{% endif %}
 </section>
 
+{% if outdated %}
+<section>
+  <h2>Sites behind on software</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Client</th><th>Software</th><th>Running</th><th>Latest</th><th></th></tr></thead>
+    <tbody>
+    {% for g in outdated %}
+      <tr>
+        <td><a href="{{ url_for('clients.detail', client_id=g.client_id) }}#versions">{{ g.client_name }}</a></td>
+        <td>{{ g.software_name }}</td>
+        <td>{% for v in g.versions %}<span class="ver ver-behind">{{ v }}</span> {% endfor %}
+          <small class="muted">on {{ g.machines|length }} computer{{ 's' if g.machines|length != 1 }}</small></td>
+        <td><span class="ver ver-current">{{ g.latest }}</span></td>
+        <td class="nowrap"><a class="button small" href="{{ deployment_link(g) }}">Plan upgrade</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
 <section>
   <h2>Later</h2>
   {% if later %}{{ items_table(later) }}{% else %}<p class="muted">—</p>{% endif %}

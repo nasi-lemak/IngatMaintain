@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import items_table, jobs_table, csrf %}
+{% from "_macros.html" import items_table, jobs_table, csrf, version_table, version_history %}
 {% block title %}{{ client.name }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -62,6 +62,29 @@
     </details>
   </section>
 </div>
+
+<section class="card" id="versions">
+  <div class="page-head">
+    <h2>Software versions</h2>
+    {% if machines %}<a class="button small" href="{{ url_for('software.update_client', client_id=client.id) }}">Record versions</a>{% endif %}
+  </div>
+  {% for g in outdated %}
+    <p class="callout">{{ g.software_name }}: {{ g.machines|length }} computer{{ 's' if g.machines|length != 1 }}
+      on {{ g.versions|join(', ') }}, latest is {{ g.latest }}.
+      <a href="{{ deployment_link(g) }}">Plan upgrade</a></p>
+  {% endfor %}
+  {% if version_columns %}
+    {{ version_table(version_columns, version_rows) }}
+    <details>
+      <summary>Recent version changes</summary>
+      {{ version_history(version_changes, show_client=false) }}
+    </details>
+  {% elif machines %}
+    <p class="muted">No software versions recorded for this site yet.</p>
+  {% else %}
+    <p class="muted">Add the computers first, then record what's installed on them.</p>
+  {% endif %}
+</section>
 
 <section>
   <h2>Maintenance items</h2>

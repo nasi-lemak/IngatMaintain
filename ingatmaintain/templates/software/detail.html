@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, version_badge, version_history %}
+{% block title %}{{ sw.name }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('software.index') }}">Software versions</a> /</p>
+<div class="page-head">
+  <h1>{{ sw.name }}
+    {% if latest %}<span class="ver ver-current">{{ latest }}</span>{% endif %}</h1>
+  <div class="actions"><a class="button" href="{{ url_for('software.edit', software_id=sw.id) }}">Edit</a></div>
+</div>
+{% if sw.notes %}<p class="pre">{{ sw.notes }}</p>{% endif %}
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Releases</h2>
+    <form method="post" action="{{ url_for('software.add_release', software_id=sw.id) }}" class="form">
+      {{ csrf() }}
+      <div class="grid-2">
+        <label>New version * <input name="version" required placeholder="e.g. 2.5.0"></label>
+        <label>Released on <input type="date" name="released_on" value="{{ today.isoformat() }}"></label>
+      </div>
+      <label>What changed <small class="muted">optional</small> <input name="notes"></label>
+      <button class="button small primary">Add release</button>
+    </form>
+    <ul class="plain">
+      {% for r in releases %}
+        <li>
+          <span class="ver {{ 'ver-current' if loop.first }}">{{ r.version }}</span>
+          <span class="muted small">{{ r.released_on|fmt_date }}</span>
+          {% if loop.first %}<span class="badge badge-ok">latest</span>{% endif %}
+          {% if r.notes %}<br><small>{{ r.notes }}</small>{% endif %}
+          <form method="post" action="{{ url_for('software.delete_release', release_id=r.id) }}" class="inline"
+                data-confirm="Remove release {{ r.version }}?">
+            {{ csrf() }}<button class="link small muted">remove</button>
+          </form>
+        </li>
+      {% else %}
+        <li class="muted">No releases recorded. Add the current version so outdated sites can be spotted.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Installed at</h2>
+    {% for (client_id, client_name), installs in by_client.items() %}
+      <h3><a href="{{ url_for('clients.detail', client_id=client_id) }}#versions">{{ client_name }}</a>
+        {% if client_id in behind %}
+          <a class="button small" href="{{ deployment_link(behind[client_id]) }}">Plan upgrade</a>
+        {% endif %}</h3>
+      <ul class="plain small">
+        {% for i in installs %}
+          <li>{{ i.machine_name }} {{ version_badge(i.version, i.status) }}
+            <span class="muted">since {{ i.updated_on|fmt_date }}</span></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Not recorded on any computer yet. Record versions from a client's page or from a job.</p>
+    {% endfor %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>Recent changes</h2>
+  {{ version_history(recent) }}
+</section>
+{% endblock %}

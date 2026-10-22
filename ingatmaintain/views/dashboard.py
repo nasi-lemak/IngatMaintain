@@ -4,6 +4,7 @@ from ..db import get_db, get_setting
 from ..reminders import configured_channels, notify_recipients
 from .items import STATUS_ORDER, load_items
 from .jobs import load_jobs
+from .software import deployment_link, outdated
 
 bp = Blueprint("dashboard", __name__)
 
@@ -30,4 +31,6 @@ def index():
         has_clients=has_clients,
         channels=channels,
         last_run=get_setting(conn, "last_reminder_run"),
+        outdated=outdated(conn),
+        deployment_link=deployment_link,
     )

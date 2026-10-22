@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Software versions{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Software versions</h1>
+  <div class="actions"><a class="button primary" href="{{ url_for('software.new') }}">+ Add software</a></div>
+</div>
+<p class="muted">Track which version of each product runs on every client computer. Add a release when a new
+  version comes out, and every site still on an older version shows up below.</p>
+
+{% if outdated %}
+<section>
+  <h2>Sites needing an upgrade</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Client</th><th>Software</th><th>Running</th><th>Latest</th><th>Computers behind</th><th></th></tr></thead>
+    <tbody>
+    {% for g in outdated %}
+      <tr>
+        <td><a href="{{ url_for('clients.detail', client_id=g.client_id) }}#versions">{{ g.client_name }}</a></td>
+        <td><a href="{{ url_for('software.detail', software_id=g.software_id) }}">{{ g.software_name }}</a></td>
+        <td>{% for v in g.versions %}<span class="ver ver-behind">{{ v }}</span> {% endfor %}</td>
+        <td><span class="ver ver-current">{{ g.latest }}</span></td>
+        <td>{{ g.machines|length }} <small class="muted">({{ g.machines|join(', ') }})</small></td>
+        <td class="nowrap"><a class="button small" href="{{ deployment_link(g) }}">Plan upgrade</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Products</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Software</th><th>Latest release</th><th>Installed on</th><th>Behind</th></tr></thead>
+    <tbody>
+    {% for s in software %}
+      <tr>
+        <td><a href="{{ url_for('software.detail', software_id=s.id) }}"><strong>{{ s.name }}</strong></a>
+          {% if s.notes %}<br><small class="muted">{{ s.notes|truncate(100) }}</small>{% endif %}</td>
+        <td>{% if s.latest %}<span class="ver ver-current">{{ s.latest }}</span>{% else %}<span class="muted">none recorded</span>{% endif %}</td>
+        <td>{{ s.installs }} computer{{ 's' if s.installs != 1 }}</td>
+        <td>{% if s.behind %}<span class="badge badge-urgent">{{ s.behind }} computer{{ 's' if s.behind != 1 }} at {{ s.clients_behind }} site{{ 's' if s.clients_behind != 1 }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">No software yet. Add the products you deploy to client sites.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

@@ -71,3 +71,45 @@
 </table>
 </div>
 {% endmacro %}
+
+{% macro version_badge(version, status) -%}
+  {%- if version -%}
+  <span class="ver ver-{{ status }}" title="{{ {'current': 'Latest version', 'behind': 'Older than the latest release', 'ahead': 'Newer than the latest recorded release', 'unknown': 'No release recorded yet'}[status] }}">{{ version }}</span>
+  {%- else -%}<span class="muted">–</span>{%- endif -%}
+{%- endmacro %}
+
+{# Read-only computers x software table. #}
+{% macro version_table(columns, rows) %}
+<div class="table-wrap">
+<table class="version-grid">
+  <thead>
+    <tr><th>Computer</th>
+      {% for c in columns %}<th>{{ c.name }}{% if c.latest %}<br><small class="muted">latest {{ c.latest }}</small>{% endif %}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td><strong>{{ r.machine.name }}</strong></td>
+      {% for cell in r.cells %}
+        <td>{{ version_badge(cell.version, cell.status) }}{% if cell.updated_on %}<br><small class="muted">{{ cell.updated_on|fmt_date }}</small>{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% macro version_history(entries, show_client=true) %}
+<ul class="plain small">
+  {% for h in entries %}
+    <li><span class="muted">{{ h.changed_on|fmt_date }}</span> ·
+      {% if show_client %}{{ h.client_name }} · {% endif %}<strong>{{ h.machine_name }}</strong> · {{ h.software_name }}
+      {{ h.old_version or 'not installed' }} → <strong>{{ h.new_version or 'removed' }}</strong>
+      <span class="muted">by {{ h.changed_by }}{% if h.job_id %} · <a href="{{ url_for('jobs.detail', job_id=h.job_id) }}">job #{{ h.job_id }}</a>{% endif %}</span>
+      {% if h.note %}<br><span class="muted">{{ h.note }}</span>{% endif %}</li>
+  {% else %}
+    <li class="muted">No changes recorded yet.</li>
+  {% endfor %}
+</ul>
+{% endmacro %}
