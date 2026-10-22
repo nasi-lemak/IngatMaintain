@@ -24,7 +24,7 @@ def _today(config):
     return datetime.now(ZoneInfo(config["TIMEZONE"])).date()
 
 
-def open_job_summary(conn, item_id):
+def open_job_summary(conn, item_id, on_date):
     job = conn.execute(
         "SELECT * FROM jobs WHERE item_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1", (item_id,)
     ).fetchone()
@@ -33,7 +33,11 @@ def open_job_summary(conn, item_id):
     from .views.jobs import job_progress
 
     done, total = job_progress(conn, job["id"])
-    return {"id": job["id"], "done": done, "total": total, "scheduled_date": job["scheduled_date"]}
+    upcoming = conn.execute(
+        "SELECT MIN(visit_date) FROM job_visits WHERE job_id = ? AND visit_date >= ?",
+        (job["id"], on_date.isoformat()),
+    ).fetchone()[0]
+    return {"id": job["id"], "done": done, "total": total, "scheduled_date": upcoming}
 
 
 def collect_due(conn, on_date):
@@ -63,7 +67,7 @@ def collect_due(conn, on_date):
         ).fetchone()
         if already:
             continue
-        due.append({"item": item, "days_left": days_left, "bucket": bucket, "job": open_job_summary(conn, item["id"])})
+        due.append({"item": item, "days_left": days_left, "bucket": bucket, "job": open_job_summary(conn, item["id"], on_date)})
     return due
 
 
@@ -86,15 +90,100 @@ def format_line(entry, base_url):
     return line
 
 
-def build_message(due, on_date, base_url):
-    overdue = sum(1 for d in due if d["days_left"] < 0)
-    subject = f"IngatMaintain: {len(due)} maintenance reminder{'s' if len(due) != 1 else ''}"
-    if overdue:
-        subject += f" ({overdue} overdue)"
-    lines = [format_line(d, base_url) for d in due]
+def collect_visits(conn, on_date):
+    """Site visits today or tomorrow whose reminder hasn't gone out for that date yet.
+
+    Normally sent the day before; "today" catches a visit booked late or a missed run.
+    """
+    from .views.jobs import job_progress, load_visits
+
+    days = (on_date.isoformat(), (on_date + timedelta(days=1)).isoformat())
+    rows = conn.execute(
+        """
+        SELECT v.*, j.title AS job_title, i.title AS item_title,
+               c.name AS client_name, c.site_address, c.access_notes, c.contact_name, c.contact_phone
+        FROM job_visits v
+        JOIN jobs j ON j.id = v.job_id
+        JOIN maintenance_items i ON i.id = j.item_id
+        JOIN clients c ON c.id = i.client_id
+        WHERE j.status = 'open' AND v.visit_date IN (?, ?)
+          AND (v.reminded_for IS NULL OR v.reminded_for != v.visit_date)
+        ORDER BY v.visit_date, c.name
+        """,
+        days,
+    ).fetchall()
+    visits = []
+    for row in rows:
+        visit = dict(row)
+        siblings = load_visits(conn, row["job_id"])
+        visit["number"] = next(v["number"] for v in siblings if v["id"] == row["id"])
+        visit["visit_count"] = len(siblings)
+        visit["done"], visit["total"] = job_progress(conn, row["job_id"])
+        unticked = conn.execute(
+            """SELECT r.kind, r.name, r.quantity FROM job_requirements r
+               LEFT JOIN job_checks k ON k.kind = 'req' AND k.ref_id = r.id
+               WHERE r.job_id = ? AND k.id IS NULL ORDER BY r.position""",
+            (row["job_id"],),
+        ).fetchall()
+        visit["to_pack"] = [r["name"] + (f" x{r['quantity']}" if r["quantity"] else "")
+                            for r in unticked if r["kind"] == "equipment"]
+        visit["software"] = [r["name"] for r in unticked if r["kind"] == "software"]
+        visit["when"] = "TODAY" if row["visit_date"] == days[0] else "TOMORROW"
+        visits.append(visit)
+    return visits
+
+
+def _day(iso):
+    d = parse_date(iso)
+    return f"{d.strftime('%a')} {fmt_date(d)}"
+
+
+def format_visit(visit, base_url):
+    which = ""
+    if visit["visit_count"] > 1:
+        which = f" (visit {visit['number']} of {visit['visit_count']}"
+        which += f": {visit['purpose']})" if visit["purpose"] else ")"
+    elif visit["purpose"]:
+        which = f" ({visit['purpose']})"
+    lines = [
+        f"[VISIT {visit['when']}] {_day(visit['visit_date'])} - {visit['client_name']} - {visit['item_title']}{which}",
+        f"    Team: {visit['assigned_to'] or 'nobody assigned yet!'}",
+    ]
+    if visit["site_address"]:
+        lines.append(f"    Site: {visit['site_address']}")
+    if visit["contact_name"] or visit["contact_phone"]:
+        lines.append(f"    Contact: {visit['contact_name']} {visit['contact_phone']}".rstrip())
+    if visit["access_notes"]:
+        lines.append("    Access: " + " / ".join(visit["access_notes"].splitlines()))
+    if visit["to_pack"]:
+        lines.append("    Still to pack: " + ", ".join(visit["to_pack"]))
+    if visit["software"]:
+        lines.append("    Check laptop has: " + ", ".join(visit["software"]))
+    lines.append(f"    Checklist {visit['done']}/{visit['total']} ticked - {base_url}/jobs/{visit['job_id']}")
+    return "\n".join(lines)
+
+
+def build_message(due, on_date, base_url, visits=()):
+    parts, sections, lines = [], [], []
+    if visits:
+        n = len(visits)
+        parts.append(f"{n} site visit{'s' if n != 1 else ''} coming up")
+        visit_lines = [format_visit(v, base_url) for v in visits]
+        sections.append("SITE VISITS\n\n" + "\n\n".join(visit_lines))
+        lines += visit_lines
+    if due:
+        overdue = sum(1 for d in due if d["days_left"] < 0)
+        part = f"{len(due)} maintenance reminder{'s' if len(due) != 1 else ''}"
+        if overdue:
+            part += f" ({overdue} overdue)"
+        parts.append(part)
+        due_lines = [format_line(d, base_url) for d in due]
+        sections.append("MAINTENANCE REMINDERS\n\n" + "\n\n".join(due_lines))
+        lines += due_lines
+    subject = "IngatMaintain: " + ", ".join(parts)
     body = (
-        f"Maintenance reminders for {fmt_date(on_date)}\n\n"
-        + "\n\n".join(lines)
+        f"IngatMaintain - {fmt_date(on_date)}\n\n"
+        + "\n\n\n".join(sections)
         + f"\n\nDashboard: {base_url}/\n"
     )
     return subject, body, lines
@@ -147,7 +236,7 @@ def send_telegram(config, text):
     _post_json(url, {"chat_id": config["TELEGRAM_CHAT_ID"], "text": text[:4000], "disable_web_page_preview": True})
 
 
-def send_webhook(config, subject, body, due):
+def send_webhook(config, subject, body, due, visits=()):
     # "text" works for Slack, Google Chat and Teams incoming webhooks.
     _post_json(
         config["WEBHOOK_URL"],
@@ -163,11 +252,20 @@ def send_webhook(config, subject, body, due):
                 }
                 for d in due
             ],
+            "visits": [
+                {
+                    "job_id": v["job_id"],
+                    "client": v["client_name"],
+                    "visit_date": v["visit_date"],
+                    "team": v["assigned_to"],
+                }
+                for v in visits
+            ],
         },
     )
 
 
-def deliver(config, conn, subject, body, due=()):
+def deliver(config, conn, subject, body, due=(), visits=()):
     """Send on every configured channel. Returns (succeeded, errors)."""
     recipients = notify_recipients(conn)
     succeeded, errors = [], []
@@ -178,7 +276,7 @@ def deliver(config, conn, subject, body, due=()):
             elif channel == "telegram":
                 send_telegram(config, f"{subject}\n\n{body}")
             elif channel == "webhook":
-                send_webhook(config, subject, body, list(due))
+                send_webhook(config, subject, body, list(due), list(visits))
             succeeded.append(channel)
         except Exception as exc:  # report and carry on with the other channels
             log.exception("Reminder channel %s failed", channel)
@@ -197,22 +295,24 @@ def run_reminders(conn, config, on_date=None, dry_run=False):
 def _run_reminders(conn, config, on_date, dry_run):
     on_date = on_date or _today(config)
     due = collect_due(conn, on_date)
-    if not due:
+    visits = collect_visits(conn, on_date)
+    if not due and not visits:
         return {"sent": 0, "message": "No reminders due today.", "lines": []}
 
-    subject, body, lines = build_message(due, on_date, config["BASE_URL"])
+    count = len(due) + len(visits)
+    subject, body, lines = build_message(due, on_date, config["BASE_URL"], visits)
     if dry_run:
-        return {"sent": 0, "message": f"{len(due)} reminder(s) would be sent (dry run).", "lines": lines}
+        return {"sent": 0, "message": f"{count} reminder(s) would be sent (dry run).", "lines": lines}
 
     if not configured_channels(config, notify_recipients(conn)):
         return {
             "sent": 0,
-            "message": f"{len(due)} reminder(s) due but no notification channel is configured "
+            "message": f"{count} reminder(s) due but no notification channel is configured "
             "(set SMTP_* with user emails, TELEGRAM_* or WEBHOOK_URL). They are still shown on the dashboard.",
             "lines": lines,
         }
 
-    succeeded, errors = deliver(config, conn, subject, body, due)
+    succeeded, errors = deliver(config, conn, subject, body, due, visits)
     if not succeeded:
         return {"sent": 0, "message": "Sending failed: " + "; ".join(errors), "lines": lines}
 
@@ -221,11 +321,14 @@ def _run_reminders(conn, config, on_date, dry_run):
         "INSERT OR IGNORE INTO reminder_log (item_id, due_date, threshold, sent_at, channels) VALUES (?, ?, ?, ?, ?)",
         [(d["item"]["id"], d["item"]["due_date"], d["bucket"], sent_at, ",".join(succeeded)) for d in due],
     )
+    conn.executemany(
+        "UPDATE job_visits SET reminded_for = visit_date WHERE id = ?", [(v["id"],) for v in visits]
+    )
     conn.commit()
-    message = f"Sent {len(due)} reminder(s) via {', '.join(succeeded)}."
+    message = f"Sent {count} reminder(s) via {', '.join(succeeded)}."
     if errors:
         message += " Some channels failed: " + "; ".join(errors)
-    return {"sent": len(due), "message": message, "lines": lines}
+    return {"sent": count, "message": message, "lines": lines}
 
 
 def start_scheduler(app):

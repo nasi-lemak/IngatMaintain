@@ -10,7 +10,8 @@ SSL_STEPS = [
     ("Preparation", "Agree the visit date with the clinic and confirm site access",
      "Check registration / escort requirements and permitted working hours.", False),
     ("Preparation", "Confirm the Synapxe contact who will submit the CSRs and their turnaround time",
-     "Book the second visit only after the .cer files are expected back.", False),
+     "Ask whether they can return the .cer files the same day. If not, plan a second visit "
+     "for the install (add it on the job page).", False),
     ("Preparation", "Check laptop software and pack every item on the packing list", "", False),
 
     ("On site - generate CSR", "Generate a CSR on the computer",

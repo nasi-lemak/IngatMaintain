@@ -49,6 +49,12 @@ def _migrate(conn):
         if column not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_share_token ON jobs(share_token)")
+    # v1 kept one visit date on the job itself: turn it into visit 1.
+    conn.execute(
+        """INSERT INTO job_visits (job_id, position, visit_date, assigned_to)
+           SELECT id, 0, scheduled_date, assigned_to FROM jobs
+           WHERE id NOT IN (SELECT job_id FROM job_visits)"""
+    )
 
 
 def get_setting(conn, key, default=None):

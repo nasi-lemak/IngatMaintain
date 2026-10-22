@@ -218,17 +218,23 @@ def calendar_feed(token):
             f"{base}/items/{i['id']}",
             stamp,
         )
-    jobs = conn.execute(
-        "SELECT j.*, c.name AS client_name FROM jobs j JOIN maintenance_items i ON i.id = j.item_id "
-        "JOIN clients c ON c.id = i.client_id WHERE j.status = 'open' AND j.scheduled_date IS NOT NULL"
+    visits = conn.execute(
+        """SELECT v.*, j.title, c.name AS client_name,
+                  (SELECT COUNT(*) FROM job_visits v2 WHERE v2.job_id = v.job_id) AS visit_count,
+                  (SELECT COUNT(*) FROM job_visits v2 WHERE v2.job_id = v.job_id
+                   AND (v2.position < v.position OR (v2.position = v.position AND v2.id < v.id))) + 1 AS number
+           FROM job_visits v JOIN jobs j ON j.id = v.job_id
+           JOIN maintenance_items i ON i.id = j.item_id JOIN clients c ON c.id = i.client_id
+           WHERE j.status = 'open' AND v.visit_date IS NOT NULL"""
     ).fetchall()
-    for j in jobs:
+    for v in visits:
+        which = f" (visit {v['number']} of {v['visit_count']})" if v["visit_count"] > 1 else ""
         lines += _all_day_event(
-            f"job-{j['id']}@ingatmaintain",
-            j["scheduled_date"],
-            f"Site visit: {j['client_name']} - {j['title']}",
-            f"Assigned: {j['assigned_to'] or 'unassigned'}",
-            f"{base}/jobs/{j['id']}",
+            f"visit-{v['id']}@ingatmaintain",
+            v["visit_date"],
+            f"Site visit: {v['client_name']} - {v['title']}{which}",
+            f"{v['purpose']}\nTeam: {v['assigned_to'] or 'unassigned'}".strip(),
+            f"{base}/jobs/{v['job_id']}",
             stamp,
         )
     lines.append("END:VCALENDAR")

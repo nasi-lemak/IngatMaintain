@@ -14,7 +14,8 @@
       </select>
       {% if not procedures %}<small><a href="{{ url_for('procedures.new') }}">Create a checklist first</a></small>{% endif %}
     </label>
-    <label>Planned visit date <input type="date" name="scheduled_date"></label>
+    <label>Planned visit date <input type="date" name="scheduled_date">
+      <small class="muted">You can reschedule, or add a second visit, later.</small></label>
   </div>
   <fieldset>
     <legend>Computers this job covers</legend>

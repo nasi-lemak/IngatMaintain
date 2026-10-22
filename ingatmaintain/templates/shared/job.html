@@ -4,8 +4,13 @@
 {% block content %}
 <p class="muted small">Ingat<span class="accent">Maintain</span> · shared checklist</p>
 <h1>{{ client.name }} – {{ item.title }}</h1>
-<p class="muted">{{ job.procedure_name }}{% if job.scheduled_date %} · visit {{ job.scheduled_date|fmt_date }}{% endif %}
-  {% if job.assigned_to %} · team: {{ job.assigned_to }}{% endif %}</p>
+<p class="muted">{{ job.procedure_name }}</p>
+<ul class="plain small">
+  {% for v in job.visits %}
+    <li>{{ 'Visit ' ~ v.number if job.visits|length > 1 else 'Visit' }}{% if v.purpose %} ({{ v.purpose }}){% endif %}:
+      <strong>{{ v.visit_date|fmt_date or 'date to be confirmed' }}</strong>{% if v.assigned_to %} · {{ v.assigned_to }}{% endif %}</li>
+  {% endfor %}
+</ul>
 
 {% if current_user %}
   <p class="flash flash-info">You're logged in. <a href="{{ url_for('jobs.detail', job_id=job.id) }}">Open the full job page</a>.</p>

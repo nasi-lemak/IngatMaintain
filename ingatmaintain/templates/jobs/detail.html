@@ -24,20 +24,73 @@
 </div>
 
 <div class="grid-2">
-  <section class="card">
-    <h2>Visit</h2>
-    <form method="post" action="{{ url_for('jobs.update', job_id=job.id) }}" class="form">
-      {{ csrf() }}
-      <label>Visit date <input type="date" name="scheduled_date" value="{{ job.scheduled_date or '' }}"></label>
-      <fieldset>
-        <legend>Assigned</legend>
-        {% set assigned = job.assigned_to.split(', ') %}
-        {% for u in users %}{% set n = u.full_name or u.username %}
-          <label class="checkbox"><input type="checkbox" name="assigned_to" value="{{ n }}" {{ 'checked' if n in assigned }}> {{ n }}</label>
-        {% endfor %}
-      </fieldset>
-      <button class="button small">Save visit details</button>
-    </form>
+  <section class="card" id="visits">
+    <h2>{{ 'Visits' if job.visits|length > 1 else 'Visit' }}</h2>
+    {% set editable = job.status == 'open' %}
+    {% for v in job.visits %}
+      {% set past = v.visit_date and v.visit_date < today.isoformat() %}
+      <div class="visit {{ 'visit-past' if past }}">
+        <div class="visit-summary">
+          <div>
+            <strong>{% if job.visits|length > 1 %}Visit {{ v.number }}{% if v.purpose %} · {{ v.purpose }}{% endif %}{% else %}{{ v.purpose or 'Site visit' }}{% endif %}</strong><br>
+            <span class="visit-date">{{ v.visit_date|fmt_date or 'Date to be confirmed' }}</span>
+            {% if past %}<span class="badge">past</span>{% endif %}
+            <br><small class="muted">Team: {{ v.assigned_to or 'nobody assigned' }}</small>
+          </div>
+        </div>
+        {% if editable %}
+        <details>
+          <summary>Reschedule / change team</summary>
+          <form method="post" action="{{ url_for('jobs.update_visit', job_id=job.id, visit_id=v.id) }}" class="form">
+            {{ csrf() }}
+            <div class="grid-2">
+              <label>Date <input type="date" name="visit_date" value="{{ v.visit_date or '' }}"></label>
+              <label>What's this visit for? <small class="muted">optional</small>
+                <input name="purpose" value="{{ v.purpose }}" maxlength="80" placeholder="e.g. Install certificates"></label>
+            </div>
+            <fieldset>
+              <legend>Who's going</legend>
+              {% set assigned = v.assigned_to.split(', ') %}
+              {% for u in users %}{% set n = u.full_name or u.username %}
+                <label class="checkbox"><input type="checkbox" name="assigned_to" value="{{ n }}" {{ 'checked' if n in assigned }}> {{ n }}</label>
+              {% endfor %}
+            </fieldset>
+            <label>Reason for the change <small class="muted">optional – saved in the job log</small>
+              <input name="reason" placeholder="e.g. Clinic asked to postpone / Synapxe still processing"></label>
+            <button class="button small">Save</button>
+          </form>
+          {% if job.visits|length > 1 %}
+          <form method="post" action="{{ url_for('jobs.delete_visit', job_id=job.id, visit_id=v.id) }}"
+                data-confirm="Remove this visit?">
+            {{ csrf() }}<button class="link danger-text small">Remove this visit</button>
+          </form>
+          {% endif %}
+        </details>
+        {% endif %}
+      </div>
+    {% endfor %}
+    {% if editable %}
+    <details class="add-visit">
+      <summary>+ Add another visit</summary>
+      <p class="muted small">Only needed if the work can't be finished in one trip, e.g. Synapxe hasn't returned the
+        .cer files yet. The checklist carries on where you left off.</p>
+      <form method="post" action="{{ url_for('jobs.add_visit', job_id=job.id) }}" class="form">
+        {{ csrf() }}
+        <div class="grid-2">
+          <label>Date <input type="date" name="visit_date"></label>
+          <label>What's this visit for? <small class="muted">optional</small>
+            <input name="purpose" maxlength="80" placeholder="e.g. Install certificates"></label>
+        </div>
+        <fieldset>
+          <legend>Who's going</legend>
+          {% for u in users %}{% set n = u.full_name or u.username %}
+            <label class="checkbox"><input type="checkbox" name="assigned_to" value="{{ n }}" {{ 'checked' if u.id == current_user.id }}> {{ n }}</label>
+          {% endfor %}
+        </fieldset>
+        <button class="button small">Add visit</button>
+      </form>
+    </details>
+    {% endif %}
   </section>
 
   <section class="card">

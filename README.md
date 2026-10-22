@@ -33,6 +33,21 @@ A job's page works well on a phone, and every tick saves straight away. If the s
 has no signal (a server room, for example), use **Print checklist** for a paper
 copy, then tick the boxes online afterwards.
 
+### Visits and rescheduling
+
+A job starts with one site visit. You can change its date or team at any time from the
+**Visits** card on the job page. Each change is added to the job log ("Visit moved from
+4 May 2028 to 11 May 2028"), with an optional reason. The calendar feed moves the event as well.
+
+If the work can't be finished in one trip, use **+ Add another visit**. For example,
+Synapxe may not return the .cer files on the same day. Each visit has its own date and
+team and can be rescheduled separately. The checklist carries over between visits, so
+nothing needs re-ticking.
+
+The day before each visit, the team gets a reminder with the date, site address, access
+notes, who's going, the items not yet packed and the laptop software not yet checked.
+If a visit is rescheduled, a new reminder goes out for the new date.
+
 ### Logins and share links
 
 Everyone on the team has their own login, so each tick records who did it. A
@@ -120,6 +135,7 @@ or Outlook to see every expiry date and planned site visit.
 - Each item has a list of "days before" marks (default `180,90,60,30,14,7,1`).
   When a mark is reached, one reminder goes out, as a daily digest that covers all items.
 - After the due date, a reminder goes out every week until the job is completed or the item is archived.
+- Site visits are reminded the day before (or on the day, if booked late), in the same daily message.
 - Completing a job sets the new due date, so the reminder cycle starts again for that date.
 - If no channel is configured or every channel fails, nothing is marked as sent, and the
   reminders go out on the next run once the problem is fixed. The dashboard always shows what's due.

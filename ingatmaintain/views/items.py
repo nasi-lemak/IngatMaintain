@@ -10,6 +10,7 @@ from ..util import (
     parse_date,
     today,
 )
+from .jobs import load_jobs
 
 bp = Blueprint("items", __name__, url_prefix="/items")
 
@@ -134,7 +135,7 @@ def new():
 def detail(item_id):
     conn = get_db()
     item = get_item(item_id)
-    jobs = conn.execute("SELECT * FROM jobs WHERE item_id = ? ORDER BY id DESC", (item_id,)).fetchall()
+    jobs = load_jobs(conn, "j.item_id = ?", (item_id,))
     reminders = conn.execute(
         "SELECT * FROM reminder_log WHERE item_id = ? ORDER BY sent_at DESC LIMIT 20", (item_id,)
     ).fetchall()

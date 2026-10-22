@@ -32,18 +32,51 @@ def load_jobs(conn, where="1 = 1", params=(), limit=None):
         JOIN maintenance_items i ON i.id = j.item_id
         JOIN clients c ON c.id = i.client_id
         WHERE {where}
-        ORDER BY CASE j.status WHEN 'open' THEN 0 ELSE 1 END,
-                 COALESCE(j.scheduled_date, '9999'), j.id DESC
+        ORDER BY CASE j.status WHEN 'open' THEN 0 ELSE 1 END, j.id DESC
         {f'LIMIT {int(limit)}' if limit else ''}
         """,
         params,
     ).fetchall()
+    on_date = today().isoformat()
     jobs = []
     for row in rows:
         job = dict(row)
         job["done"], job["total"] = job_progress(conn, row["id"])
+        job["visits"] = load_visits(conn, row["id"])
+        job["next_visit"] = next_visit(job["visits"], on_date)
+        # Shorthands used by tables, calendar and reminders.
+        job["scheduled_date"] = job["next_visit"]["visit_date"] if job["next_visit"] else None
+        job["assigned_to"] = job["next_visit"]["assigned_to"] if job["next_visit"] else ""
         jobs.append(job)
+    # Open jobs first, soonest visit first (stable sort keeps newest-first for ties).
+    jobs.sort(key=lambda j: (j["status"] != "open", j["scheduled_date"] or "9999"))
     return jobs
+
+
+def load_visits(conn, job_id):
+    visits = [dict(v) for v in conn.execute(
+        "SELECT * FROM job_visits WHERE job_id = ? ORDER BY position, id", (job_id,)
+    )]
+    for number, visit in enumerate(visits, 1):
+        visit["number"] = number
+    return visits
+
+
+def next_visit(visits, on_date):
+    """The visit to show for a job: the next upcoming one, else the latest one, else the first."""
+    upcoming = sorted((v for v in visits if v["visit_date"] and v["visit_date"] >= on_date),
+                      key=lambda v: v["visit_date"])
+    if upcoming:
+        return upcoming[0]
+    past = sorted((v for v in visits if v["visit_date"]), key=lambda v: v["visit_date"])
+    if past:
+        return past[-1]
+    return visits[0] if visits else None
+
+
+def visit_label(visit, total):
+    label = f"Visit {visit['number']}" if total > 1 else "Visit"
+    return label + (f" ({visit['purpose']})" if visit.get("purpose") else "")
 
 
 def get_job(job_id):
@@ -141,19 +174,21 @@ def start(item_id):
         else:
             chosen = set(request.form.getlist("machine_ids", type=int))
             job_id = conn.execute(
-                "INSERT INTO jobs (item_id, title, procedure_name, scheduled_date, assigned_to, created_by, "
-                "created_at, previous_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (item_id, title, procedure_name, created_by, created_at, previous_due_date) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     item_id,
                     request.form.get("title", "").strip() or f"{item['title']} - {item['client_name']}",
                     proc["name"],
-                    scheduled.isoformat() if scheduled else None,
-                    _assigned(request.form),
                     display_name(),
                     now_str(),
                     item["due_date"],
                 ),
             ).lastrowid
+            conn.execute(
+                "INSERT INTO job_visits (job_id, position, visit_date, assigned_to) VALUES (?, 0, ?, ?)",
+                (job_id, scheduled.isoformat() if scheduled else None, _assigned(request.form)),
+            )
             conn.executemany(
                 "INSERT INTO job_machines (job_id, machine_id, position, name) VALUES (?, ?, ?, ?)",
                 [(job_id, m["id"], i, m["name"]) for i, m in enumerate(m for m in machines if m["id"] in chosen)],
@@ -254,22 +289,122 @@ def toggle(job_id):
     return handle_toggle(get_db(), job, display_name(), url_for("jobs.detail", job_id=job_id))
 
 
-@bp.route("/<int:job_id>/update", methods=["POST"])
-def update(job_id):
+def _log(conn, job_id, body):
+    conn.execute(
+        "INSERT INTO job_notes (job_id, author, created_at, body) VALUES (?, ?, ?, ?)",
+        (job_id, display_name(), now_str(), body),
+    )
+
+
+def _visit_form(form):
+    """(date or None, team, purpose) from a visit form; raises ValueError on a bad date."""
+    visit_date = parse_date(form.get("visit_date"))
+    return (visit_date.isoformat() if visit_date else None, _assigned(form),
+            form.get("purpose", "").strip()[:80])
+
+
+def _get_open_job_for_visits(job_id):
+    job = get_job(job_id)
+    if job["status"] != "open":
+        flash("This job is closed - reopen it to change visits.", "error")
+        return None
+    return job
+
+
+@bp.route("/<int:job_id>/visits", methods=["POST"])
+def add_visit(job_id):
+    """Book another site visit, e.g. when Synapxe can't return the certificates on the day."""
     conn = get_db()
-    get_job(job_id)
+    job = _get_open_job_for_visits(job_id)
+    if job is None:
+        return redirect(url_for("jobs.detail", job_id=job_id))
     try:
-        scheduled = parse_date(request.form.get("scheduled_date"))
+        visit_date, team, purpose = _visit_form(request.form)
     except ValueError:
         flash("Visit date must be a valid date.", "error")
-        return redirect(url_for("jobs.detail", job_id=job_id))
+        return redirect(url_for("jobs.detail", job_id=job_id) + "#visits")
+    position = max((v["position"] for v in job["visits"]), default=-1) + 1
     conn.execute(
-        "UPDATE jobs SET scheduled_date = ?, assigned_to = ? WHERE id = ?",
-        (scheduled.isoformat() if scheduled else None, _assigned(request.form), job_id),
+        "INSERT INTO job_visits (job_id, position, visit_date, assigned_to, purpose) VALUES (?, ?, ?, ?, ?)",
+        (job_id, position, visit_date, team, purpose),
     )
+    number = len(job["visits"]) + 1
+    _log(conn, job_id, f"Visit {number} added" + (f" ({purpose})" if purpose else "")
+         + (f" for {fmt_date(visit_date)}" if visit_date else ", date to be confirmed")
+         + (f". Team: {team}" if team else "") + ".")
     conn.commit()
-    flash("Visit details saved.", "success")
-    return redirect(url_for("jobs.detail", job_id=job_id))
+    flash(f"Visit {number} added.", "success")
+    return redirect(url_for("jobs.detail", job_id=job_id) + "#visits")
+
+
+@bp.route("/<int:job_id>/visits/<int:visit_id>", methods=["POST"])
+def update_visit(job_id, visit_id):
+    """Reschedule a visit or change who's going. Every change is written to the job log."""
+    conn = get_db()
+    job = _get_open_job_for_visits(job_id)
+    if job is None:
+        return redirect(url_for("jobs.detail", job_id=job_id))
+    visit = next((v for v in job["visits"] if v["id"] == visit_id), None)
+    if visit is None:
+        abort(404)
+    try:
+        visit_date, team, purpose = _visit_form(request.form)
+    except ValueError:
+        flash("Visit date must be a valid date.", "error")
+        return redirect(url_for("jobs.detail", job_id=job_id) + "#visits")
+
+    label = visit_label(visit, len(job["visits"]))
+    reason = request.form.get("reason", "").strip()
+    changes = []
+    if visit_date != visit["visit_date"]:
+        if visit["visit_date"] and visit_date:
+            changes.append(f"{label} moved from {fmt_date(visit['visit_date'])} to {fmt_date(visit_date)}")
+        elif visit_date:
+            changes.append(f"{label} booked for {fmt_date(visit_date)}")
+        else:
+            changes.append(f"{label} date cleared (was {fmt_date(visit['visit_date'])})")
+    if team != visit["assigned_to"]:
+        changes.append(f"{label} team: {team or 'nobody assigned'}")
+    if purpose != visit["purpose"]:
+        if not purpose:
+            changes.append(f"{label} description removed")
+        else:
+            changes.append(f"{label} {'renamed' if visit['purpose'] else 'described'} as '{purpose}'")
+    if not changes:
+        flash("Nothing changed.", "info")
+        return redirect(url_for("jobs.detail", job_id=job_id) + "#visits")
+
+    conn.execute(
+        "UPDATE job_visits SET visit_date = ?, assigned_to = ?, purpose = ? WHERE id = ?",
+        (visit_date, team, purpose, visit_id),
+    )
+    _log(conn, job_id, ". ".join(changes) + "." + (f"\nReason: {reason}" if reason else ""))
+    conn.commit()
+    flash(changes[0] + "." + (" The calendar and visit reminder follow the new date." if visit_date != visit["visit_date"] else ""),
+          "success")
+    return redirect(url_for("jobs.detail", job_id=job_id) + "#visits")
+
+
+@bp.route("/<int:job_id>/visits/<int:visit_id>/delete", methods=["POST"])
+def delete_visit(job_id, visit_id):
+    conn = get_db()
+    job = _get_open_job_for_visits(job_id)
+    if job is None:
+        return redirect(url_for("jobs.detail", job_id=job_id))
+    visit = next((v for v in job["visits"] if v["id"] == visit_id), None)
+    if visit is None:
+        abort(404)
+    if len(job["visits"]) == 1:
+        flash("A job always has at least one visit - change its date instead.", "error")
+        return redirect(url_for("jobs.detail", job_id=job_id) + "#visits")
+    conn.execute("DELETE FROM job_visits WHERE id = ?", (visit_id,))
+    reason = request.form.get("reason", "").strip()
+    _log(conn, job_id, f"{visit_label(visit, len(job['visits']))} removed"
+         + (f" (was {fmt_date(visit['visit_date'])})" if visit["visit_date"] else "") + "."
+         + (f"\nReason: {reason}" if reason else ""))
+    conn.commit()
+    flash("Visit removed.", "success")
+    return redirect(url_for("jobs.detail", job_id=job_id) + "#visits")
 
 
 @bp.route("/<int:job_id>/notes", methods=["POST"])

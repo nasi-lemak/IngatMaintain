@@ -101,8 +101,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     title             TEXT NOT NULL,
     procedure_name    TEXT NOT NULL DEFAULT '',
     status            TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'cancelled')),
-    scheduled_date    TEXT,
-    assigned_to       TEXT NOT NULL DEFAULT '',
+    scheduled_date    TEXT,                 -- legacy (v1): visit dates now live in job_visits
+    assigned_to       TEXT NOT NULL DEFAULT '', -- legacy (v1)
     created_by        TEXT NOT NULL DEFAULT '',
     created_at        TEXT NOT NULL,
     completed_at      TEXT,
@@ -114,6 +114,21 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_item ON jobs(item_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+
+-- Site visits for a job. Usually one; add another when e.g. Synapxe can't
+-- return the certificates on the same day. reminded_for = the visit_date the
+-- day-before reminder was sent for, so rescheduling triggers a fresh reminder.
+CREATE TABLE IF NOT EXISTS job_visits (
+    id           INTEGER PRIMARY KEY,
+    job_id       INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL,
+    visit_date   TEXT,
+    assigned_to  TEXT NOT NULL DEFAULT '',
+    purpose      TEXT NOT NULL DEFAULT '',
+    reminded_for TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_visits_job ON job_visits(job_id, position);
+CREATE INDEX IF NOT EXISTS idx_job_visits_date ON job_visits(visit_date);
 
 CREATE TABLE IF NOT EXISTS job_machines (
     id         INTEGER PRIMARY KEY,

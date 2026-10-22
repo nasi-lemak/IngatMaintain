@@ -86,12 +86,19 @@ def test_link_dies_on_revoke_renew_expiry_and_completion(admin, conn, app):
     assert conn.execute("SELECT share_token FROM jobs WHERE id = ?", (job_id,)).fetchone()[0] is None
 
 
-def test_old_database_gets_share_columns(tmp_path):
+def test_old_database_is_migrated(tmp_path):
     path = tmp_path / "old.sqlite3"
     old = sqlite3.connect(path)
-    old.execute("CREATE TABLE jobs (id INTEGER PRIMARY KEY, item_id INTEGER, title TEXT, status TEXT, created_at TEXT)")
+    old.execute(
+        "CREATE TABLE jobs (id INTEGER PRIMARY KEY, item_id INTEGER, title TEXT, status TEXT, created_at TEXT, "
+        "scheduled_date TEXT, assigned_to TEXT NOT NULL DEFAULT '')"
+    )
+    old.execute("INSERT INTO jobs (item_id, title, status, created_at, scheduled_date, assigned_to) "
+                "VALUES (1, 'Old job', 'open', 'x', '2028-05-04', 'Ada')")
     old.commit()
     old.close()
     create_app({"TESTING": True, "SECRET_KEY": "x", "DATABASE": str(path)})
     cols = {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(jobs)")}
     assert {"share_token", "share_expires_at"} <= cols
+    visit = sqlite3.connect(path).execute("SELECT job_id, visit_date, assigned_to FROM job_visits").fetchall()
+    assert visit == [(1, "2028-05-04", "Ada")]

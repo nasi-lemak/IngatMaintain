@@ -58,7 +58,8 @@
     <tr>
       <td><a href="{{ url_for('jobs.detail', job_id=j.id) }}"><strong>#{{ j.id }} {{ j.title }}</strong></a></td>
       <td>{{ j.client_name }}</td>
-      <td class="nowrap">{{ j.scheduled_date|fmt_date or '—' }}</td>
+      <td class="nowrap">{{ j.scheduled_date|fmt_date or '—' }}
+        {% if j.visits|length > 1 %}<br><small class="muted">visit {{ j.next_visit.number }} of {{ j.visits|length }}</small>{% endif %}</td>
       <td>{{ j.assigned_to or '—' }}</td>
       <td class="progress-cell">{{ progress(j.done, j.total) }}</td>
       <td>{{ job_status(j) }}</td>

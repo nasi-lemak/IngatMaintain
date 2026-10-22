@@ -9,8 +9,11 @@
 <body>
 <button class="no-print" onclick="window.print()">🖨 Print</button>
 <h1>{{ client.name }} – {{ item.title }}</h1>
-<p>Job #{{ job.id }} · {{ job.procedure_name }} · Visit: {{ job.scheduled_date|fmt_date or '________' }}
-  · Team: {{ job.assigned_to or '________________' }}</p>
+<p>Job #{{ job.id }} · {{ job.procedure_name }}</p>
+{% for v in job.visits %}
+<p>{{ 'Visit ' ~ v.number if job.visits|length > 1 else 'Visit' }}{% if v.purpose %} ({{ v.purpose }}){% endif %}:
+  {{ v.visit_date|fmt_date or '________' }} · Team: {{ v.assigned_to or '________________' }}</p>
+{% endfor %}
 <p>Current expiry: {{ item.due_date|fmt_date or '—' }} · New expiry: ________________</p>
 {% if client.site_address or client.contact_name %}
 <p>Site: {{ client.site_address }} {% if client.contact_name %}· Contact: {{ client.contact_name }} {{ client.contact_phone }}{% endif %}</p>
