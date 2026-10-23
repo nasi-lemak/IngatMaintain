@@ -51,6 +51,14 @@ def create_app(test_config=None):
         REMINDER_HOUR=int(os.environ.get("REMINDER_HOUR", "8")),
         # Remind again every N days while a site is behind on software (0 = first notice only).
         OUTDATED_REMINDER_DAYS=int(os.environ.get("OUTDATED_REMINDER_DAYS", "30")),
+        # Fleet monitoring (agents on internet-connected client computers)
+        FLEET_MONITOR=env_bool("FLEET_MONITOR", True),
+        FLEET_CHECKIN_MINUTES=int(os.environ.get("FLEET_CHECKIN_MINUTES", "5")),
+        FLEET_CHECK_MINUTES=int(os.environ.get("FLEET_CHECK_MINUTES", "5")),
+        FLEET_OFFLINE_HOURS=int(os.environ.get("FLEET_OFFLINE_HOURS", "24")),
+        FLEET_CERT_WARN_DAYS=int(os.environ.get("FLEET_CERT_WARN_DAYS", "30")),
+        FLEET_ENROLL_DAYS=int(os.environ.get("FLEET_ENROLL_DAYS", "7")),
+        MAX_CONTENT_LENGTH=2 * 1024 * 1024,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=env_bool("SESSION_COOKIE_SECURE", False),
@@ -66,13 +74,20 @@ def create_app(test_config=None):
     if not app.config.get("SECRET_KEY"):
         app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or _secret_key(data_dir)
 
+    if env_bool("BEHIND_PROXY", False):
+        # Behind nginx / Caddy / IIS doing HTTPS: trust one proxy's X-Forwarded-* headers.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     from . import auth, db, util
-    from .views import admin, clients, dashboard, items, jobs, procedures, shared, software
+    from .views import admin, clients, dashboard, fleet, items, jobs, procedures, shared, software
 
     db.init_app(app)
     auth.init_app(app)
-    for module in (dashboard, clients, items, procedures, jobs, admin, shared, software):
+    for module in (dashboard, clients, items, procedures, jobs, admin, shared, software, fleet):
         app.register_blueprint(module.bp)
+    app.register_blueprint(fleet.api)
 
     app.jinja_env.filters["fmt_date"] = util.fmt_date
 

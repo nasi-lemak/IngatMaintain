@@ -1,6 +1,7 @@
 from flask import Blueprint, current_app, render_template
 
 from ..db import get_db, get_setting
+from ..fleet import alert_rows
 from ..reminders import configured_channels, notify_recipients
 from .items import STATUS_ORDER, load_items
 from .jobs import load_jobs
@@ -32,5 +33,6 @@ def index():
         channels=channels,
         last_run=get_setting(conn, "last_reminder_run"),
         outdated=outdated(conn),
+        fleet_alerts=alert_rows(conn, "a.resolved_at IS NULL"),
         deployment_link=deployment_link,
     )

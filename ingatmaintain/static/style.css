@@ -168,6 +168,19 @@ details summary { cursor: pointer; color: var(--brand); font-weight: 500; margin
 .version-grid input.ver-in-current { background: #f1f9f1; }
 .legend { display: flex; flex-wrap: wrap; gap: 0.8rem; font-size: 0.85rem; margin: 0.4rem 0; }
 
+/* Fleet */
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #b0bac5; vertical-align: middle; }
+.dot-online { background: var(--ok); box-shadow: 0 0 0 3px #e8f5e9; }
+.dot-quiet { background: var(--upcoming); }
+.dot-offline { background: var(--overdue); }
+pre.command { background: #12202e; color: #e6edf3; padding: 0.8rem; border-radius: 8px; overflow-x: auto;
+  white-space: pre; font-size: 0.85rem; }
+.secret { font-family: ui-monospace, monospace; font-size: 1rem; word-break: break-all; background: #fff8e1;
+  padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px dashed var(--upcoming); }
+.meter { background: #e7ebef; border-radius: 4px; height: 6px; overflow: hidden; margin-top: 3px; }
+.meter > span { display: block; height: 100%; background: var(--ok); }
+.meter.low > span { background: var(--overdue); }
+
 /* Progress */
 .progress { background: #e7ebef; border-radius: 999px; height: 8px; overflow: hidden; }
 .progress.big { height: 14px; flex: 1; }

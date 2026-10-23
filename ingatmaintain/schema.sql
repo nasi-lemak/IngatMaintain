@@ -262,3 +262,42 @@ CREATE TABLE IF NOT EXISTS upgrade_reminder_log (
     sent_on     TEXT NOT NULL,
     UNIQUE (client_id, software_id, target, bucket)
 );
+
+-- ---------------------------------------------------------------- fleet (internet-connected sites)
+
+-- Per-client monitoring settings. The enrollment key is only stored hashed;
+-- it is shown once when generated and stops working at enroll_expires.
+CREATE TABLE IF NOT EXISTS fleet_settings (
+    client_id         INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+    enroll_key_hash   TEXT,
+    enroll_expires    TEXT,                       -- UTC ISO timestamp
+    services          TEXT NOT NULL DEFAULT '',   -- comma separated service names to watch
+    cert_paths        TEXT NOT NULL DEFAULT '',   -- one certificate file per line
+    disk_free_percent INTEGER NOT NULL DEFAULT 10
+);
+
+-- An enrolled agent, tied 1:1 to a client computer. Only a hash of its token is kept.
+CREATE TABLE IF NOT EXISTS devices (
+    id            INTEGER PRIMARY KEY,
+    machine_id    INTEGER NOT NULL UNIQUE REFERENCES machines(id) ON DELETE CASCADE,
+    token_hash    TEXT NOT NULL UNIQUE,
+    enrolled_at   TEXT NOT NULL,              -- UTC ISO timestamp
+    last_seen     TEXT,                       -- UTC ISO timestamp
+    last_ip       TEXT NOT NULL DEFAULT '',
+    agent_version TEXT NOT NULL DEFAULT '',
+    report        TEXT NOT NULL DEFAULT '{}'  -- latest check-in, JSON
+);
+
+-- Problems found from check-ins (disk, service, cert) or by the monitor (offline).
+CREATE TABLE IF NOT EXISTS fleet_alerts (
+    id                INTEGER PRIMARY KEY,
+    machine_id        INTEGER NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
+    kind              TEXT NOT NULL,          -- offline / disk / service / cert
+    key               TEXT NOT NULL DEFAULT '',
+    message           TEXT NOT NULL,
+    opened_at         TEXT NOT NULL,          -- UTC ISO timestamp
+    resolved_at       TEXT,
+    notified_open     INTEGER NOT NULL DEFAULT 0,
+    notified_resolved INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_fleet_alerts_open ON fleet_alerts(machine_id, resolved_at);

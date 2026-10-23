@@ -42,6 +42,27 @@
   {% endif %}
 </section>
 
+{% if fleet_alerts %}
+<section>
+  <h2>Fleet alerts</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Client</th><th>Computer</th><th>Problem</th><th>Since</th></tr></thead>
+    <tbody>
+    {% for a in fleet_alerts %}
+      <tr>
+        <td><a href="{{ url_for('clients.detail', client_id=a.client_id) }}#monitoring">{{ a.client_name }}</a></td>
+        <td>{{ a.machine_name }}</td>
+        <td>{{ a.message }}</td>
+        <td class="nowrap">{{ a.opened_at|local_time }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
 <section>
   <h2>Jobs in progress</h2>
   {% if open_jobs %}{{ jobs_table(open_jobs) }}{% else %}<p class="muted">No open jobs.</p>{% endif %}

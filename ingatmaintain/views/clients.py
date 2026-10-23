@@ -3,6 +3,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from ..auth import admin_required
 from ..db import get_db
 from .items import load_items
+from .fleet import client_fleet_context
 from .jobs import load_jobs
 from .software import deployment_link, history, load_holds, outdated, version_grid
 
@@ -81,6 +82,7 @@ def detail(client_id):
         outdated=outdated(conn, client_id=client_id), deployment_link=deployment_link,
         version_changes=history(conn, "c.id = ?", (client_id,), limit=10),
         holds=list(load_holds(conn, client_id).values()),
+        **client_fleet_context(conn, client_id),
     )
 
 

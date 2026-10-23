@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, device_state %}
+{% block title %}{{ d.machine_name }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('fleet.index') }}">Fleet</a> /
+  <a href="{{ url_for('clients.detail', client_id=d.client_id) }}#monitoring">{{ d.client_name }}</a> /</p>
+<div class="page-head">
+  <h1>{{ d.machine_name }}</h1>
+  <div>{{ device_state(d.state, d.last_seen) }}</div>
+</div>
+{% set r = d.report %}
+<div class="grid-2">
+  <section class="card">
+    <h2>System</h2>
+    <dl class="facts">
+      <dt>Hostname</dt><dd>{{ r.hostname or '—' }}</dd>
+      <dt>OS</dt><dd>{{ r.os or '—' }}</dd>
+      <dt>Uptime</dt><dd>{% if r.uptime_hours %}{{ (r.uptime_hours / 24)|round(1) }} days{% else %}—{% endif %}</dd>
+      <dt>Memory</dt><dd>{% if r.memory and r.memory.total_gb %}{{ r.memory.free_gb }} of {{ r.memory.total_gb }} GB free{% else %}—{% endif %}</dd>
+      <dt>IP addresses</dt><dd>{{ (r.ips or [])|join(', ') or '—' }}</dd>
+      <dt>Connects from</dt><dd>{{ d.last_ip or '—' }}</dd>
+      <dt>Last check-in</dt><dd>{{ d.last_seen|local_time or 'never' }}</dd>
+      <dt>Enrolled</dt><dd>{{ d.enrolled_at|local_time }}</dd>
+      <dt>Agent</dt><dd>{{ d.agent_version or '—' }}</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Disks</h2>
+    {% for disk in r.disks or [] %}
+      {% set pct = (100 * disk.free_gb / disk.total_gb)|round|int if disk.total_gb else 0 %}
+      <p><strong>{{ disk.name }}</strong> {{ disk.free_gb }} GB free of {{ disk.total_gb }} GB ({{ pct }}%)
+        <span class="meter {{ 'low' if pct < settings.disk_free_percent }}"><span style="width: {{ pct }}%"></span></span></p>
+    {% else %}<p class="muted">Nothing reported.</p>{% endfor %}
+
+    <h2>Services</h2>
+    <ul class="plain">
+      {% for s in r.services or [] %}
+        <li>{{ s.name }} <span class="badge {{ 'badge-ok' if s.status|lower in ('running', 'active') else 'badge-overdue' }}">{{ s.status }}</span></li>
+      {% else %}<li class="muted">None watched – set them in the client's monitoring settings.</li>{% endfor %}
+    </ul>
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Certificates</h2>
+    <ul class="plain">
+      {% for c in r.certs or [] %}
+        <li><code>{{ c.path }}</code><br>
+          {% if c.error %}<span class="danger-text">{{ c.error }}</span>
+          {% else %}expires <strong>{{ c.not_after|fmt_date }}</strong> <small class="muted">{{ c.subject }}</small>{% endif %}</li>
+      {% else %}<li class="muted">None watched – add certificate file paths in the client's monitoring settings.</li>{% endfor %}
+    </ul>
+  </section>
+  <section class="card">
+    <h2>Software</h2>
+    <ul class="plain">
+      {% for name, version in (r.software or {}).items() %}
+        <li>{{ name }} <span class="ver">{{ version }}</span></li>
+      {% else %}<li class="muted">No tracked software found. Products from the Versions page are looked up in Windows' installed programs.</li>{% endfor %}
+    </ul>
+    <p class="muted small">Reported versions update <a href="{{ url_for('clients.detail', client_id=d.client_id) }}#versions">version tracking</a> automatically.</p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Alerts</h2>
+  <ul class="plain">
+    {% for a in alerts %}
+      <li>{% if a.resolved_at %}<span class="badge badge-ok">resolved</span>{% else %}<span class="badge badge-overdue">open</span>{% endif %}
+        {{ a.message }} <small class="muted">{{ a.opened_at|local_time }}{% if a.resolved_at %} → {{ a.resolved_at|local_time }}{% endif %}</small></li>
+    {% else %}<li class="muted">No alerts.</li>{% endfor %}
+  </ul>
+</section>
+
+{% if current_user.is_admin %}
+<form method="post" action="{{ url_for('fleet.revoke', device_id=d.id) }}" class="card subtle"
+      data-confirm="Remove this agent? Its token stops working immediately.">
+  {{ csrf() }}<button class="button small danger">Remove agent</button>
+  <small class="muted">Use when a computer is replaced or decommissioned. The computer's record and history stay.</small>
+</form>
+{% endif %}
+{% endblock %}

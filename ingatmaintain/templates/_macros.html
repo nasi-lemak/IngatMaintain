@@ -114,3 +114,9 @@
   {% endfor %}
 </ul>
 {% endmacro %}
+
+{% macro device_state(state, last_seen) -%}
+  <span class="dot dot-{{ state }}" aria-hidden="true"></span>
+  {%- if state == 'online' %} Online{% elif state == 'never' %} Waiting for first check-in
+  {%- else %} {{ 'Offline' if state == 'offline' else 'Last seen' }} {{ last_seen|ago }}{% endif %}
+{%- endmacro %}

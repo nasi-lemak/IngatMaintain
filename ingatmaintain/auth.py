@@ -23,7 +23,9 @@ bp = Blueprint("auth", __name__)
 
 PUBLIC_ENDPOINTS = {"auth.login", "auth.setup", "admin.calendar_feed", "static"}
 # Share-link pages check their own token instead of a login.
-PUBLIC_PREFIXES = ("shared.",)
+PUBLIC_PREFIXES = ("shared.", "agent_api.")
+# The agent API authenticates with device tokens, not cookies, so CSRF doesn't apply.
+CSRF_EXEMPT_PREFIXES = ("agent_api.",)
 
 
 def csrf_token():
@@ -125,7 +127,7 @@ def init_app(app):
             if g.user is None:
                 session.clear()
 
-        if request.method == "POST":
+        if request.method == "POST" and not (request.endpoint or "").startswith(CSRF_EXEMPT_PREFIXES):
             sent = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or ""
             expected = session.get("csrf") or ""
             if not expected or not hmac.compare_digest(sent, expected):

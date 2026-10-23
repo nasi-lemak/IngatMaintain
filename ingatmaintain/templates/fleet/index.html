@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, device_state %}
+{% block title %}Fleet{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Fleet</h1>
+  <div class="actions">
+    {% if current_user.is_admin %}
+    <form method="post" action="{{ url_for('fleet.check_now') }}" class="inline">{{ csrf() }}<button class="button">Check now</button></form>
+    {% endif %}
+  </div>
+</div>
+<p class="muted">Live health of computers at sites that allow internet access. A small agent on each computer checks in
+  every few minutes. To add a site, open the client and use <em>Remote monitoring</em>.</p>
+
+<div class="tiles">
+  <div class="tile tile-ok"><b>{{ counts.online }}</b>Online</div>
+  <div class="tile tile-upcoming"><b>{{ counts.quiet }}</b>Quiet (switched off?)</div>
+  <div class="tile tile-overdue"><b>{{ counts.offline }}</b>Offline</div>
+  <div class="tile tile-urgent"><b>{{ alerts|length }}</b>Open alerts</div>
+</div>
+
+{% if alerts %}
+<section>
+  <h2>Open alerts</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Client</th><th>Computer</th><th>Problem</th><th>Since</th></tr></thead>
+    <tbody>
+    {% for a in alerts %}
+      <tr>
+        <td><a href="{{ url_for('clients.detail', client_id=a.client_id) }}#monitoring">{{ a.client_name }}</a></td>
+        <td>{{ a.machine_name }}</td>
+        <td><span class="badge badge-{{ 'overdue' if a.kind in ('offline', 'service') else 'urgent' }}">{{ a.kind }}</span> {{ a.message }}</td>
+        <td class="nowrap">{{ a.opened_at|local_time }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <div class="page-head">
+    <h2>Devices</h2>
+    {% if clients|length > 1 %}
+    <form method="get" class="filters">
+      <select name="client" onchange="this.form.submit()">
+        <option value="">All clients</option>
+        {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if c.id == client_id }}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Computer</th><th>Status</th><th>OS</th><th>Lowest disk</th><th>Certificate</th><th>Alerts</th></tr></thead>
+    <tbody>
+    {% for d in devices %}
+      <tr>
+        <td><a href="{{ url_for('fleet.device', device_id=d.id) }}"><strong>{{ d.machine_name }}</strong></a><br>
+          <small class="muted">{{ d.client_name }}</small></td>
+        <td class="nowrap">{{ device_state(d.state, d.last_seen) }}</td>
+        <td><small>{{ d.report.os or '—' }}</small></td>
+        <td class="nowrap">{% if d.min_disk %}{% set pct = (100 * d.min_disk.free_gb / d.min_disk.total_gb)|round|int %}
+          {{ d.min_disk.name }} {{ d.min_disk.free_gb }} GB free ({{ pct }}%)
+          <div class="meter {{ 'low' if pct < 10 }}"><span style="width: {{ pct }}%"></span></div>{% else %}—{% endif %}</td>
+        <td class="nowrap">{% if d.next_cert %}expires {{ d.next_cert.not_after|fmt_date }}{% else %}—{% endif %}</td>
+        <td>{% if d.open_alerts %}<span class="badge badge-overdue">{{ d.open_alerts }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">No agents enrolled yet. Open a client and use <em>Remote monitoring</em> to get an install command.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

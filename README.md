@@ -70,6 +70,58 @@ with the version and a reason. That site is no longer flagged for newer releases
 if a computer falls below the held version. Held computers show in purple.
 Click **Release hold** when the upgrade is approved.
 
+### Fleet monitoring (sites with internet access)
+
+Some sites allow the computers outbound internet access. On those, a small PowerShell
+agent can report each computer's health to IngatMaintain every 5 minutes.
+
+**What it reports:**
+- online status, OS, uptime, IP addresses, memory
+- free disk space
+- whether the services you name are running (e.g. `mosquitto`)
+- the expiry date of the certificate files you name (the public certificate only, never the key)
+- the installed version of every product on the Versions page, read from Windows' installed programs
+
+Reported versions update version tracking automatically, so these sites don't need
+someone recording versions by hand.
+
+**Alerts** open on their own, are notified through the usual email / Telegram / webhook
+channels, and resolve once the problem clears:
+- a disk below the threshold
+- a watched service stopped or missing
+- a certificate expiring within 30 days or unreadable
+- a computer not seen for 24 hours
+
+They show on the dashboard, on the **Fleet** page and on each device's page.
+
+**Setting up a site** (admin):
+1. On the client page, under **Remote monitoring**, set what to watch: service names,
+   certificate file paths and the disk threshold.
+2. Click **Get install command**. It shows a one-time enrollment key, valid for 7 days,
+   and two PowerShell lines.
+3. On each computer, run those lines in an **elevated** PowerShell. They enroll the
+   computer (matched to the existing record by hostname, or added) and create the
+   *IngatMaintain Agent* scheduled task, running as SYSTEM every 5 minutes. If downloads
+   are blocked, copy `install.ps1` and `agent.ps1` over on the secure drive and run the
+   same line from that folder.
+
+**Security design:**
+- **No inbound access.** The agent only makes outgoing HTTPS requests. Nothing listens
+  on the computer, and the server cannot run commands or install anything there. It is
+  monitoring only.
+- **Secrets are hashed.** Each computer gets its own random token. The server stores
+  only hashes of tokens and enrollment keys, and the token file on the computer is
+  readable only by SYSTEM and Administrators.
+- **Easy to cut off.** **Remove agent** cuts a computer off at once, and
+  **Close enrollment** stops new sign-ups.
+- **HTTPS is required.** `install.ps1` refuses a non-HTTPS server, so the app must be
+  reachable over HTTPS. Put it behind a reverse proxy such as Caddy, nginx or IIS, and
+  set `BEHIND_PROXY=true` so device IP addresses are recorded correctly.
+- **No client data is sent.** The agent sends system information only: no files, no
+  patient data, and no private keys.
+
+To uninstall from a computer: `powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall`.
+
 ### Visits and rescheduling
 
 A job starts with one site visit. You can change its date or team at any time from the
@@ -136,6 +188,10 @@ flask --app ingatmaintain send-reminders            # add --dry-run to preview
 
 It's safe to run this any number of times. Each reminder is sent once, and a failed send is retried on the next run.
 
+The fleet monitor (offline checks and alert notifications) runs every
+`FLEET_CHECK_MINUTES` in the same way. With `FLEET_MONITOR=false`, run
+`flask --app ingatmaintain fleet-check` from cron instead.
+
 ### Other commands
 
 ```bash
@@ -164,6 +220,8 @@ All settings are environment variables. See `.env.example` for the full list.
 | `SESSION_COOKIE_SECURE` | Set to `true` when served over HTTPS. |
 | `SESSION_LIFETIME_DAYS` | How long a device stays logged in after its last visit (default 365). |
 | `SHARE_LINK_DAYS` | How long a job's share link works at most (default 30). |
+| `BEHIND_PROXY` | `true` when a reverse proxy terminates HTTPS in front of the app. |
+| `FLEET_MONITOR`, `FLEET_CHECKIN_MINUTES`, `FLEET_CHECK_MINUTES`, `FLEET_OFFLINE_HOURS`, `FLEET_CERT_WARN_DAYS`, `FLEET_ENROLL_DAYS` | Fleet monitoring. See `.env.example`. |
 | `OUTDATED_REMINDER_DAYS` | Remind again every N days while a site is behind on software (default 30, 0 = first notice only). |
 
 **Settings → Send test notification** checks that the channels work.

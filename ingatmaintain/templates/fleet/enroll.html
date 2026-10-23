@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Enrollment key{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="{{ url_for('clients.detail', client_id=client.id) }}#monitoring">{{ client.name }}</a> /</p>
+<h1>Install the agent at {{ client.name }}</h1>
+<div class="card">
+  <p><strong>Copy this now – it won't be shown again.</strong> It works until <strong>{{ expires }}</strong>
+    for any number of computers at this site. Afterwards, installed agents keep working.</p>
+  <p class="secret">{{ key }}</p>
+
+  <h2>On each computer</h2>
+  <p>Open <strong>PowerShell as administrator</strong> and run:</p>
+  <pre class="command">{{ command }}</pre>
+  <p class="muted small">This enrolls the computer, stores its device token where only SYSTEM and Administrators can read
+    it, and creates the <em>IngatMaintain Agent</em> scheduled task. The agent only makes outgoing HTTPS requests to
+    this server. Computers already listed for this client are matched by hostname; others are added.</p>
+  <p class="muted small">No direct download allowed on site? Copy
+    <a href="{{ url_for('agent_api.script', name='install.ps1') }}">install.ps1</a> and
+    <a href="{{ url_for('agent_api.script', name='agent.ps1') }}">agent.ps1</a> into one folder on the secure drive
+    and run the second line from that folder.</p>
+</div>
+<a class="button" href="{{ url_for('clients.detail', client_id=client.id) }}#monitoring">Done</a>
+{% endblock %}

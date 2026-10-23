@@ -118,6 +118,13 @@ def init_app(app):
 
         click.echo(seed_example(get_db()))
 
+    @app.cli.command("fleet-check")
+    def fleet_check_command():
+        """Raise offline alerts and send fleet alert notifications (for cron, if FLEET_MONITOR=false)."""
+        from .fleet import run_monitor
+
+        click.echo(run_monitor(get_db(), current_app.config))
+
     @app.cli.command("send-reminders")
     @click.option("--dry-run", is_flag=True, help="Show what would be sent without sending")
     def send_reminders_command(dry_run):

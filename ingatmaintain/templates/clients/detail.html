@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import items_table, jobs_table, csrf, version_table, version_history %}
+{% from "_macros.html" import items_table, jobs_table, csrf, version_table, version_history, device_state %}
 {% block title %}{{ client.name }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -29,6 +29,7 @@
       {% for m in machines %}
       <li>
         <div>
+          {% if m.id in fleet_devices %}<span class="dot dot-{{ fleet_devices[m.id].state }}" title="Monitored"></span>{% endif %}
           <strong>{{ m.name }}</strong>
           <small class="muted">{{ [m.hostname, m.ip_address, m.location, m.os]|select|join(' · ') }}</small>
           {% if m.notes %}<br><small>{{ m.notes }}</small>{% endif %}
@@ -127,6 +128,49 @@
     <p class="muted">No software versions recorded for this site yet.</p>
   {% else %}
     <p class="muted">Add the computers first, then record what's installed on them.</p>
+  {% endif %}
+</section>
+
+<section class="card" id="monitoring">
+  <h2>Remote monitoring</h2>
+  <p class="muted small">For sites that allow outbound internet access. An agent on each computer reports health every few
+    minutes – disk space, watched services, certificate expiry and software versions. It only sends; nothing on the
+    computer can be controlled from here.</p>
+  {% if fleet_devices %}
+    <ul class="plain">
+      {% for d in fleet_devices.values() %}
+        <li><a href="{{ url_for('fleet.device', device_id=d.id) }}"><strong>{{ d.machine_name }}</strong></a>
+          {{ device_state(d.state, d.last_seen) }}
+          {% if d.open_alerts %}<span class="badge badge-overdue">{{ d.open_alerts }} alert{{ 's' if d.open_alerts != 1 }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if current_user.is_admin %}
+    <div class="actions">
+      {% if fleet_enroll_open %}
+        <span class="small">Enrollment open until {{ fleet_enroll_until }}.</span>
+        <form method="post" action="{{ url_for('fleet.close_enrollment', client_id=client.id) }}" class="inline">
+          {{ csrf() }}<button class="button small">Close enrollment</button></form>
+      {% endif %}
+      <form method="post" action="{{ url_for('fleet.open_enrollment', client_id=client.id) }}" class="inline"
+            {% if fleet_enroll_open %}data-confirm="Create a new key? The current one stops working."{% endif %}>
+        {{ csrf() }}<button class="button small primary">{{ 'New install key' if fleet_enroll_open else 'Get install command' }}</button></form>
+    </div>
+    <details {% if not fleet_settings.services and not fleet_settings.cert_paths and fleet_devices %}open{% endif %}>
+      <summary>What to watch at this site</summary>
+      <form method="post" action="{{ url_for('fleet.update_settings', client_id=client.id) }}" class="form">
+        {{ csrf() }}
+        <label>Services that must be running <small class="muted">comma separated Windows service names</small>
+          <input name="services" value="{{ fleet_settings.services }}" placeholder="e.g. mosquitto"></label>
+        <label>Certificate files to check for expiry <small class="muted">one path per line – the public certificate, never the key</small>
+          <textarea name="cert_paths" rows="2" placeholder="e.g. C:\Program Files\mosquitto\certs\server.crt">{{ fleet_settings.cert_paths }}</textarea></label>
+        <label>Alert when a disk has less than this % free
+          <input type="number" name="disk_free_percent" min="1" max="90" value="{{ fleet_settings.disk_free_percent }}"></label>
+        <button class="button small">Save</button>
+      </form>
+    </details>
+  {% elif not fleet_devices %}
+    <p class="muted small">Not set up. An admin can create the install command here.</p>
   {% endif %}
 </section>
 
