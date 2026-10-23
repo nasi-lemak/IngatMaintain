@@ -19,7 +19,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$AgentVersion = '1.0.0'
+$AgentVersion = '1.1.0'
 $ConfigFile = Join-Path $ConfigDir 'agent.json'
 $LogFile = Join-Path $ConfigDir 'agent.log'
 $OnWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or ($IsWindows -eq $true)
@@ -134,6 +134,61 @@ function Get-SoftwareVersions($names) {
     $found
 }
 
+# Drive health from Windows' own storage stack (Windows 8 / Server 2012 and later).
+# Counters a drive doesn't support come back as $null (or 0 for temperature) and are left out.
+function Get-StorageHealth {
+    $drives = @()
+    if (-not $OnWindows -or -not (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue)) { return , $drives }
+    foreach ($pd in @(Get-PhysicalDisk -ErrorAction SilentlyContinue)) {
+        $rc = $null
+        try { $rc = $pd | Get-StorageReliabilityCounter -ErrorAction Stop } catch { }
+        $health = switch ("$($pd.HealthStatus)") {
+            'Healthy' { 'OK' } 'Warning' { 'Warning' } 'Unhealthy' { 'Failing' } default { 'Unknown' }
+        }
+        $bus = "$($pd.BusType)"
+        $type = if ($bus -eq 'NVMe') { 'NVMe' } elseif ($bus -eq 'SD' -or $bus -eq 'MMC') { 'SD card' } `
+                elseif ($bus -eq 'USB') { 'USB' } elseif ("$($pd.MediaType)" -eq 'HDD') { 'HDD' } else { 'SSD' }
+        $wear = $null; $temp = $null; $hours = $null; $errors = $null
+        if ($rc) {
+            if ($null -ne $rc.Wear) { $wear = [int]$rc.Wear }
+            if ($rc.Temperature) { $temp = [int]$rc.Temperature }
+            if ($null -ne $rc.PowerOnHours) { $hours = [int64]$rc.PowerOnHours }
+            if ($null -ne $rc.ReadErrorsUncorrected -or $null -ne $rc.WriteErrorsUncorrected) {
+                $errors = [int64]$rc.ReadErrorsUncorrected + [int64]$rc.WriteErrorsUncorrected
+            }
+        }
+        $notes = ''
+        if ("$($pd.OperationalStatus)" -ne 'OK') { $notes = "Operational status: $($pd.OperationalStatus)" }
+        if (-not $rc) { $notes = ($notes + ' No reliability counters from this drive/controller.').Trim() }
+        $drives += @{
+            name = "Disk $($pd.DeviceId)"; model = "$($pd.FriendlyName)".Trim(); type = $type; health = $health
+            wear_pct = $wear; temp_c = $temp; power_on_hours = $hours; errors = $errors; eol = ''; notes = $notes
+        }
+    }
+    , $drives
+}
+
+# Disk / file system errors in the System event log over the last 24 hours - the earliest sign
+# of a failing drive or card, including ones that report no health data.
+function Get-StorageEvents {
+    $result = @{ count = 0; sample = ''; window_hours = 24 }
+    if (-not $OnWindows) { return $result }
+    $since = (Get-Date).AddHours(-24)
+    $events = @()
+    foreach ($provider in 'disk', 'Ntfs', 'Microsoft-Windows-Ntfs', 'stornvme', 'storahci', 'sdbus', 'volmgr') {
+        try {
+            $events += @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = $provider; Level = 1, 2, 3; StartTime = $since } -MaxEvents 100 -ErrorAction Stop)
+        } catch { }  # "no events found" and unknown providers both land here
+    }
+    if ($events.Count -gt 0) {
+        $latest = $events | Sort-Object TimeCreated -Descending | Select-Object -First 1
+        $message = ("$($latest.Message)" -split "`r?`n")[0]
+        $result.count = $events.Count
+        $result.sample = "$($latest.ProviderName) event $($latest.Id): $message"
+    }
+    $result
+}
+
 # A clean string array from JSON: drops nulls/blanks (PowerShell 5.1 turns a missing list into @($null)).
 function Get-List($value) {
     , @(@($value) | Where-Object { $_ -and "$_".Trim() } | ForEach-Object { "$_".Trim() })
@@ -163,6 +218,9 @@ try {
         services      = (Get-ServiceStates (Get-List $config.services))
         certs         = (Get-CertInfo (Get-List $config.cert_paths))
         software      = (Get-SoftwareVersions (Get-List $config.software))
+        storage       = (Get-StorageHealth)
+        storage_events = (Get-StorageEvents)
+        readonly_mounts = @()
     }
 
     $response = Send-Json -Url "$($config.server)/api/agent/checkin" -Body $report -Token $config.token

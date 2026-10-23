@@ -42,6 +42,39 @@
   </section>
 </div>
 
+<section class="card">
+  <h2>Storage health</h2>
+  {% if r.storage %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Drive</th><th>Type</th><th>Health</th><th>Life used</th><th>Temp</th><th>Power-on</th><th>Bad sectors / errors</th></tr></thead>
+    <tbody>
+    {% for x in r.storage %}
+      <tr>
+        <td><strong>{{ x.name }}</strong>{% if x.model %}<br><small class="muted">{{ x.model }}</small>{% endif %}
+          {% if x.notes %}<br><small class="muted">{{ x.notes }}</small>{% endif %}</td>
+        <td>{{ x.type }}</td>
+        <td><span class="badge badge-{{ {'OK': 'ok', 'Warning': 'urgent', 'Failing': 'overdue'}.get(x.health, 'none') }}">{{ x.health }}</span>
+          {% if x.eol %}<br><small class="muted">end of life: {{ x.eol }}</small>{% endif %}</td>
+        <td class="nowrap">{% if x.wear_pct is not none %}{{ x.wear_pct|int }}%
+          <div class="meter {{ 'low' if x.wear_pct >= 80 }}"><span style="width: {{ x.wear_pct|int }}%"></span></div>{% else %}—{% endif %}</td>
+        <td class="nowrap">{{ (x.temp_c|int ~ '°C') if x.temp_c is not none else '—' }}</td>
+        <td class="nowrap">{{ ((x.power_on_hours / 24)|round|int ~ ' days') if x.power_on_hours is not none else '—' }}</td>
+        <td>{{ x.errors|int if x.errors is not none else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted">No drive information reported.</p>{% endif %}
+  {% set ev = r.storage_events or {} %}
+  <p class="small">System log: {% if ev.count %}<strong class="danger-text">{{ ev.count }} storage error{{ 's' if ev.count != 1 }}</strong>
+    {{ ('in the last ' ~ ev.window_hours ~ ' h') if ev.window_hours else 'since boot' }}
+    {% if ev.sample %}<br><code>{{ ev.sample }}</code>{% endif %}
+    {% else %}no storage errors in the last 24 h{% endif %}
+    {% for m in r.readonly_mounts or [] %}<br><strong class="danger-text">{{ m }} is read-only</strong> – the SD card / drive is probably failing{% endfor %}</p>
+</section>
+
 <div class="grid-2">
   <section class="card">
     <h2>Certificates</h2>

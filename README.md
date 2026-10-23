@@ -72,15 +72,20 @@ Click **Release hold** when the upgrade is approved.
 
 ### Fleet monitoring (sites with internet access)
 
-Some sites allow the computers outbound internet access. On those, a small PowerShell
-agent can report each computer's health to IngatMaintain every 5 minutes.
+Some sites allow the computers outbound internet access. On those, a small agent can
+report each computer's health to IngatMaintain every 5 minutes. There are two agents:
+- **Windows:** a PowerShell agent that runs on the PowerShell 5.1 built into Windows.
+- **Linux** (Ubuntu, Debian, Raspberry Pi OS): a Python 3.8+ agent that uses only what
+  ships with the OS.
 
 **What it reports:**
 - online status, OS, uptime, IP addresses, memory
 - free disk space
 - whether the services you name are running (e.g. `mosquitto`)
 - the expiry date of the certificate files you name (the public certificate only, never the key)
-- the installed version of every product on the Versions page, read from Windows' installed programs
+- the installed version of every product on the Versions page, read from Windows'
+  installed programs or Linux packages
+- storage health (see below)
 
 Reported versions update version tracking automatically, so these sites don't need
 someone recording versions by hand.
@@ -91,6 +96,7 @@ channels, and resolve once the problem clears:
 - a watched service stopped or missing
 - a certificate expiring within 30 days or unreadable
 - a computer not seen for 24 hours
+- a drive or SD card showing signs of failure (see below)
 
 They show on the dashboard, on the **Fleet** page and on each device's page.
 
@@ -98,20 +104,47 @@ They show on the dashboard, on the **Fleet** page and on each device's page.
 1. On the client page, under **Remote monitoring**, set what to watch: service names,
    certificate file paths and the disk threshold.
 2. Click **Get install command**. It shows a one-time enrollment key, valid for 7 days,
-   and two PowerShell lines.
-3. On each computer, run those lines in an **elevated** PowerShell. They enroll the
-   computer (matched to the existing record by hostname, or added) and create the
-   *IngatMaintain Agent* scheduled task, running as SYSTEM every 5 minutes. If downloads
-   are blocked, copy `install.ps1` and `agent.ps1` over on the secure drive and run the
-   same line from that folder.
+   with the commands for Windows and for Linux.
+3. On each computer, run the commands for its operating system. Each computer is matched
+   to its existing record by hostname, or added.
+   - **Windows:** run the two lines in an **elevated** PowerShell. They create the
+     *IngatMaintain Agent* scheduled task, running as SYSTEM every 5 minutes.
+   - **Linux and Raspberry Pi:** run `curl -fsSLO …/install.sh` then
+     `sudo sh install.sh --server … --key …`. This sets up a systemd timer, or cron where
+     there's no systemd. Add `--with-smartmontools` on machines with an SSD.
+
+   If downloads are blocked on site, copy `install.ps1` + `agent.ps1` (Windows) or
+   `install.sh` + `agent.py` (Linux) over on the secure drive, and run the same command
+   from that folder.
+
+#### Storage health
+
+| Storage | What's checked | Alerts when |
+|---|---|---|
+| **SSD / NVMe / hard drive, Windows** | Windows' own drive health: status, wear, temperature, uncorrected errors, power-on hours | the drive reports Warning or Unhealthy, wear ≥ 80%, any uncorrected errors, temperature ≥ 70 °C |
+| **SSD / NVMe / hard drive, Linux** | SMART data via `smartctl` (install with `--with-smartmontools`): overall result, wear, reallocated / pending / uncorrectable sectors, temperature | SMART fails or an attribute is past its threshold, wear ≥ 80%, any bad sectors, temperature ≥ 70 °C |
+| **SD card, Raspberry Pi** | SD cards don't report health or wear, so the agent watches for the *symptoms* of a dying card: I/O, MMC and filesystem errors in the kernel log, and the root filesystem switching to read-only | any storage error in the last 24 h; `/` mounted read-only |
+| **eMMC** (soldered storage) | The kernel's wear and end-of-life estimates | wear ≥ 80%; end-of-life warning or urgent |
+| **Any drive** | Disk and file system errors in the system log (Windows event log / Linux kernel log) | any in the last 24 h |
+
+So SSDs get **early** warning, from wear and bad sectors, while an SD card can only be
+caught **as it starts failing**. For Pis in critical roles, consider industrial SD cards,
+or booting from a USB SSD so they get full SMART monitoring. Thresholds:
+`FLEET_WEAR_WARN_PCT` (80) and `FLEET_TEMP_WARN_C` (70).
+
+How much a drive reports depends on the drive and its controller. Some USB enclosures,
+RAID controllers and virtual disks expose nothing; those show as *Unknown* rather than
+*OK*. Bad-sector and uncorrectable-error counts never go back down, so that alert stays
+open until the drive is replaced.
 
 **Security design:**
 - **No inbound access.** The agent only makes outgoing HTTPS requests. Nothing listens
   on the computer, and the server cannot run commands or install anything there. It is
   monitoring only.
 - **Secrets are hashed.** Each computer gets its own random token. The server stores
-  only hashes of tokens and enrollment keys, and the token file on the computer is
-  readable only by SYSTEM and Administrators.
+  only hashes of tokens and enrollment keys, and the token file on the computer
+  (Windows: `C:\ProgramData\IngatMaintain`, Linux: `/etc/ingatmaintain`) is
+  readable only by SYSTEM and Administrators (Windows) or root (Linux).
 - **Easy to cut off.** **Remove agent** cuts a computer off at once, and
   **Close enrollment** stops new sign-ups.
 - **HTTPS is required.** `install.ps1` refuses a non-HTTPS server, so the app must be
@@ -120,7 +153,8 @@ They show on the dashboard, on the **Fleet** page and on each device's page.
 - **No client data is sent.** The agent sends system information only: no files, no
   patient data, and no private keys.
 
-To uninstall from a computer: `powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall`.
+To uninstall from a computer: `powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall`
+on Windows, or `sudo sh install.sh --uninstall` on Linux.
 
 ### Visits and rescheduling
 
@@ -221,7 +255,7 @@ All settings are environment variables. See `.env.example` for the full list.
 | `SESSION_LIFETIME_DAYS` | How long a device stays logged in after its last visit (default 365). |
 | `SHARE_LINK_DAYS` | How long a job's share link works at most (default 30). |
 | `BEHIND_PROXY` | `true` when a reverse proxy terminates HTTPS in front of the app. |
-| `FLEET_MONITOR`, `FLEET_CHECKIN_MINUTES`, `FLEET_CHECK_MINUTES`, `FLEET_OFFLINE_HOURS`, `FLEET_CERT_WARN_DAYS`, `FLEET_ENROLL_DAYS` | Fleet monitoring. See `.env.example`. |
+| `FLEET_MONITOR`, `FLEET_CHECKIN_MINUTES`, `FLEET_CHECK_MINUTES`, `FLEET_OFFLINE_HOURS`, `FLEET_CERT_WARN_DAYS`, `FLEET_ENROLL_DAYS`, `FLEET_WEAR_WARN_PCT`, `FLEET_TEMP_WARN_C` | Fleet monitoring. See `.env.example`. |
 | `OUTDATED_REMINDER_DAYS` | Remind again every N days while a site is behind on software (default 30, 0 = first notice only). |
 
 **Settings → Send test notification** checks that the channels work.

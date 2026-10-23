@@ -58,6 +58,9 @@ def create_app(test_config=None):
         FLEET_OFFLINE_HOURS=int(os.environ.get("FLEET_OFFLINE_HOURS", "24")),
         FLEET_CERT_WARN_DAYS=int(os.environ.get("FLEET_CERT_WARN_DAYS", "30")),
         FLEET_ENROLL_DAYS=int(os.environ.get("FLEET_ENROLL_DAYS", "7")),
+        # Storage health: alert when a drive has used this much of its rated life / runs this hot.
+        FLEET_WEAR_WARN_PCT=int(os.environ.get("FLEET_WEAR_WARN_PCT", "80")),
+        FLEET_TEMP_WARN_C=int(os.environ.get("FLEET_TEMP_WARN_C", "70")),
         MAX_CONTENT_LENGTH=2 * 1024 * 1024,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",

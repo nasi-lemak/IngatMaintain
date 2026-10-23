@@ -19,7 +19,7 @@ from .db import connect
 log = logging.getLogger(__name__)
 
 # Alert kinds raised from a check-in report (offline is raised by the monitor).
-REPORT_KINDS = ("disk", "service", "cert")
+REPORT_KINDS = ("disk", "service", "cert", "storage")
 
 
 def utcnow():
@@ -103,6 +103,7 @@ def clean_report(data):
 
     memory = data.get("memory") if isinstance(data.get("memory"), dict) else {}
     software = data.get("software") if isinstance(data.get("software"), dict) else {}
+    events = data.get("storage_events") if isinstance(data.get("storage_events"), dict) else {}
     return {
         "hostname": _text(data.get("hostname"), 100),
         "os": _text(data.get("os"), 200),
@@ -118,12 +119,55 @@ def clean_report(data):
                    "not_after": _text(c.get("not_after"), 10), "error": _text(c.get("error"), 200)}
                   for c in items("certs", 20)],
         "software": {_text(k, 100): _text(v, 50) for k, v in list(software.items())[:100] if v},
+        "storage": [{"name": _text(d.get("name"), 100), "model": _text(d.get("model"), 100),
+                     "type": _text(d.get("type"), 30), "health": _text(d.get("health"), 20),
+                     "wear_pct": _number(d.get("wear_pct")), "temp_c": _number(d.get("temp_c")),
+                     "power_on_hours": _number(d.get("power_on_hours")), "errors": _number(d.get("errors")),
+                     "eol": _text(d.get("eol"), 20), "notes": _text(d.get("notes"), 200)}
+                    for d in items("storage", 16)],
+        "storage_events": {"count": int(_number(events.get("count")) or 0),
+                           "sample": _text(events.get("sample"), 300),
+                           "window_hours": int(_number(events.get("window_hours")) or 0)},
+        "readonly_mounts": [_text(m, 100) for m in (data.get("readonly_mounts") or [])[:10]]
+        if isinstance(data.get("readonly_mounts"), list) else [],
     }
 
 
-def report_alerts(report, settings, on_date, cert_warn_days):
-    """{(kind, key): message} for problems visible in a check-in report."""
+def storage_alerts(report, wear_warn_pct, temp_warn_c):
+    """{(kind, key): message} for drives that are failing, worn out, erroring or too hot."""
     alerts = {}
+    for d in report.get("storage", []):
+        name = f"{d['name']} ({d['model']})" if d["model"] else d["name"]
+        health = d["health"].lower()
+        if health == "failing":
+            alerts[("storage", d["name"] + ":health")] = f"Drive {name} reports it is failing - replace it soon"
+        elif health == "warning":
+            detail = f": {d['notes']}" if d["notes"] else ""
+            alerts[("storage", d["name"] + ":health")] = f"Drive {name} reports a health warning{detail}"
+        if d["eol"] in ("warning", "urgent"):
+            alerts[("storage", d["name"] + ":eol")] = f"{d['type']} {name} is near end of life ({d['eol']})"
+        if d["wear_pct"] is not None and d["wear_pct"] >= wear_warn_pct:
+            alerts[("storage", d["name"] + ":wear")] = f"Drive {name} has used {d['wear_pct']:.0f}% of its rated life"
+        if d["errors"]:
+            alerts[("storage", d["name"] + ":errors")] = (
+                f"Drive {name} has recorded {d['errors']:.0f} bad-sector / uncorrectable errors")
+        if d["temp_c"] is not None and d["temp_c"] >= temp_warn_c:
+            alerts[("storage", d["name"] + ":temp")] = f"Drive {name} is running hot ({d['temp_c']:.0f}°C)"
+    events = report.get("storage_events") or {}
+    if events.get("count"):
+        window = f"in the last {events['window_hours']} h" if events.get("window_hours") else "since boot"
+        n = events["count"]
+        alerts[("storage", "log")] = (f"{n} storage error{'s' if n != 1 else ''} in the system log {window}"
+                                      + (f" - e.g. \"{events['sample']}\"" if events.get("sample") else ""))
+    for mount in report.get("readonly_mounts", []):
+        alerts[("storage", "ro:" + mount)] = (f"{mount} has switched to read-only - "
+                                              "the SD card / drive is probably failing")
+    return alerts
+
+
+def report_alerts(report, settings, on_date, cert_warn_days, wear_warn_pct=80, temp_warn_c=70):
+    """{(kind, key): message} for problems visible in a check-in report."""
+    alerts = storage_alerts(report, wear_warn_pct, temp_warn_c)
     for disk in report["disks"]:
         total, free = disk["total_gb"], disk["free_gb"]
         if total and free is not None:

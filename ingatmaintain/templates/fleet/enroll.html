@@ -8,16 +8,26 @@
     for any number of computers at this site. Afterwards, installed agents keep working.</p>
   <p class="secret">{{ key }}</p>
 
-  <h2>On each computer</h2>
+  <h2>Windows computers</h2>
   <p>Open <strong>PowerShell as administrator</strong> and run:</p>
   <pre class="command">{{ command }}</pre>
-  <p class="muted small">This enrolls the computer, stores its device token where only SYSTEM and Administrators can read
-    it, and creates the <em>IngatMaintain Agent</em> scheduled task. The agent only makes outgoing HTTPS requests to
+
+  <h2>Linux computers and Raspberry Pis</h2>
+  <p>In a terminal, run:</p>
+  <pre class="command">{{ linux_command }}</pre>
+  <p class="muted small">For SSD / NVMe health on Linux, add <code>--with-smartmontools</code> (installs the
+    <em>smartmontools</em> package). Raspberry Pis with only an SD card don't need it – the agent watches the kernel
+    log and read-only remounts instead, since SD cards don't report wear.</p>
+  <p class="muted small">This enrolls the computer, stores its device token where only SYSTEM / Administrators (Windows)
+    or root (Linux) can read it, and schedules the agent every few minutes (a scheduled task on Windows, a systemd timer
+    on Linux). The agent only makes outgoing HTTPS requests to
     this server. Computers already listed for this client are matched by hostname; others are added.</p>
   <p class="muted small">No direct download allowed on site? Copy
-    <a href="{{ url_for('agent_api.script', name='install.ps1') }}">install.ps1</a> and
-    <a href="{{ url_for('agent_api.script', name='agent.ps1') }}">agent.ps1</a> into one folder on the secure drive
-    and run the second line from that folder.</p>
+    <a href="{{ url_for('agent_api.script', name='install.ps1') }}">install.ps1</a> +
+    <a href="{{ url_for('agent_api.script', name='agent.ps1') }}">agent.ps1</a> (Windows) or
+    <a href="{{ url_for('agent_api.script', name='install.sh') }}">install.sh</a> +
+    <a href="{{ url_for('agent_api.script', name='agent.py') }}">agent.py</a> (Linux) into one folder on the secure
+    drive and run the second line from that folder.</p>
 </div>
 <a class="button" href="{{ url_for('clients.detail', client_id=client.id) }}#monitoring">Done</a>
 {% endblock %}

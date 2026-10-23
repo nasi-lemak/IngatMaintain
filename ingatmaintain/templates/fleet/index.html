@@ -55,7 +55,7 @@
   </div>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Computer</th><th>Status</th><th>OS</th><th>Lowest disk</th><th>Certificate</th><th>Alerts</th></tr></thead>
+    <thead><tr><th>Computer</th><th>Status</th><th>OS</th><th>Lowest disk</th><th>Drive health</th><th>Certificate</th><th>Alerts</th></tr></thead>
     <tbody>
     {% for d in devices %}
       <tr>
@@ -66,11 +66,12 @@
         <td class="nowrap">{% if d.min_disk %}{% set pct = (100 * d.min_disk.free_gb / d.min_disk.total_gb)|round|int %}
           {{ d.min_disk.name }} {{ d.min_disk.free_gb }} GB free ({{ pct }}%)
           <div class="meter {{ 'low' if pct < 10 }}"><span style="width: {{ pct }}%"></span></div>{% else %}—{% endif %}</td>
+        <td>{% if d.storage_health %}<span class="badge badge-{{ {'OK': 'ok', 'Warning': 'urgent', 'Failing': 'overdue'}.get(d.storage_health, 'none') }}">{{ d.storage_health }}</span>{% else %}—{% endif %}</td>
         <td class="nowrap">{% if d.next_cert %}expires {{ d.next_cert.not_after|fmt_date }}{% else %}—{% endif %}</td>
         <td>{% if d.open_alerts %}<span class="badge badge-overdue">{{ d.open_alerts }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="6" class="muted">No agents enrolled yet. Open a client and use <em>Remote monitoring</em> to get an install command.</td></tr>
+      <tr><td colspan="7" class="muted">No agents enrolled yet. Open a client and use <em>Remote monitoring</em> to get an install command.</td></tr>
     {% endfor %}
     </tbody>
   </table>

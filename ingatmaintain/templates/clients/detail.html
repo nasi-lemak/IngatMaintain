@@ -160,7 +160,7 @@
       <summary>What to watch at this site</summary>
       <form method="post" action="{{ url_for('fleet.update_settings', client_id=client.id) }}" class="form">
         {{ csrf() }}
-        <label>Services that must be running <small class="muted">comma separated Windows service names</small>
+        <label>Services that must be running <small class="muted">comma separated – Windows service names or Linux systemd units</small>
           <input name="services" value="{{ fleet_settings.services }}" placeholder="e.g. mosquitto"></label>
         <label>Certificate files to check for expiry <small class="muted">one path per line – the public certificate, never the key</small>
           <textarea name="cert_paths" rows="2" placeholder="e.g. C:\Program Files\mosquitto\certs\server.crt">{{ fleet_settings.cert_paths }}</textarea></label>

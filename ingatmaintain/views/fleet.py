@@ -75,6 +75,9 @@ def connection_state(last_seen):
     return "offline"
 
 
+HEALTH_RANK = {"Unknown": 0, "OK": 1, "Warning": 2, "Failing": 3}
+
+
 def load_devices(conn, where="1 = 1", params=()):
     rows = conn.execute(
         f"""SELECT d.*, m.name AS machine_name, m.client_id, c.name AS client_name,
@@ -93,16 +96,25 @@ def load_devices(conn, where="1 = 1", params=()):
         d["min_disk"] = min(disks, key=lambda x: (x["free_gb"] or 0) / x["total_gb"]) if disks else None
         certs = [c for c in d["report"].get("certs", []) if c.get("not_after")]
         d["next_cert"] = min(certs, key=lambda c: c["not_after"]) if certs else None
+        drives = d["report"].get("storage", [])
+        d["storage_health"] = max((x.get("health") or "Unknown" for x in drives),
+                                  key=lambda h: HEALTH_RANK.get(h, 0), default="")
         devices.append(d)
     return devices
 
 
-def install_command(key):
+def install_commands(key):
+    """(Windows, Linux) install commands for an enrollment key."""
     server = current_app.config["BASE_URL"]
-    return (
+    windows = (
         f"Invoke-WebRequest {server}/api/agent/install.ps1 -OutFile install.ps1 -UseBasicParsing\n"
         f"powershell -ExecutionPolicy Bypass -File .\\install.ps1 -Server {server} -EnrollKey {key}"
     )
+    linux = (
+        f"curl -fsSLO {server}/api/agent/install.sh\n"
+        f"sudo sh install.sh --server {server} --key {key}"
+    )
+    return windows, linux
 
 
 def client_fleet_context(conn, client_id):
@@ -195,7 +207,8 @@ def open_enrollment(client_id):
     settings.update(enroll_key_hash=hash_secret(key), enroll_expires=iso(expires))
     save_settings(conn, settings)
     conn.commit()
-    return render_template("fleet/enroll.html", client=client, key=key, command=install_command(key),
+    windows, linux = install_commands(key)
+    return render_template("fleet/enroll.html", client=client, key=key, command=windows, linux_command=linux,
                            expires=local_time(iso(expires)))
 
 
@@ -242,7 +255,7 @@ def _agent_file(name):
     return resources.files("ingatmaintain").joinpath("agent", name).read_text()
 
 
-@api.route("/<any('agent.ps1', 'install.ps1'):name>")
+@api.route("/<any('agent.ps1', 'install.ps1', 'agent.py', 'install.sh'):name>")
 def script(name):
     return Response(_agent_file(name), mimetype="text/plain",
                     headers={"Content-Disposition": f"attachment; filename={name}"})
@@ -322,7 +335,9 @@ def checkin():
         record_versions(conn, changes, "Monitoring agent", today().isoformat(), note="Reported by agent")
 
     settings = get_settings(conn, device["client_id"])
-    alerts = report_alerts(report, settings, today(), current_app.config["FLEET_CERT_WARN_DAYS"])
+    cfg = current_app.config
+    alerts = report_alerts(report, settings, today(), cfg["FLEET_CERT_WARN_DAYS"],
+                           cfg["FLEET_WEAR_WARN_PCT"], cfg["FLEET_TEMP_WARN_C"])
     sync_alerts(conn, device["machine_id"], alerts, REPORT_KINDS, now)
     sync_alerts(conn, device["machine_id"], {}, ("offline",), now)  # it's talking to us, so it's back
     conn.commit()
